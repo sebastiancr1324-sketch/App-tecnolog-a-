@@ -1,0 +1,2540 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Parábola · Laboratorio de tiro oblicuo</title>
+<meta name="description" content="Videojuego educativo de física: experimenta con el tiro oblicuo (tiro parabólico), cambia la velocidad, el ángulo, la altura y la gravedad de distintos planetas, y acierta a los objetivos.">
+<meta name="theme-color" content="#05061A">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2305061A'/%3E%3Cpath d='M4 27 Q16 -5 28 27' fill='none' stroke='%2300E5FF' stroke-width='2.4' stroke-dasharray='3 3'/%3E%3Ccircle cx='22' cy='13' r='3.6' fill='%23EAF2FF'/%3E%3C/svg%3E">
+
+<!-- Tipografías (Google Fonts). Si no hay internet, se usan fuentes del sistema. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&family=Orbitron:wght@600;800;900&display=swap" rel="stylesheet">
+
+<style>
+/* =====================================================================
+   1. VARIABLES DE DISEÑO (PALETA, FUENTES, CURVAS DE ANIMACIÓN)
+   Cambia aquí los colores y todo el juego se actualiza.
+   ===================================================================== */
+:root{
+  /* Fondos */
+  --fondo-0:#05061A;   /* espacio profundo (casi negro azulado) */
+  --fondo-1:#0B0F2E;   /* azul noche */
+  --fondo-2:#1A0F3D;   /* violeta profundo */
+  --panel:#0E1338;     /* superficie de tarjetas */
+  --borde:#2A3170;     /* líneas y bordes */
+  /* Acentos neón */
+  --cian:#00E5FF;      /* acento principal */
+  --violeta:#A259FF;   /* acento secundario */
+  --magenta:#FF3EA5;   /* objetivo / alertas */
+  --verde:#3DFFA2;     /* acierto */
+  --ambar:#FFC24B;     /* racha / ángulo */
+  /* Textos */
+  --texto:#EAF2FF;     /* casi blanco */
+  --texto-2:#8E9AD6;   /* texto secundario */
+
+  --f-titulo:'Orbitron','Exo 2',system-ui,sans-serif;
+  --f-texto:'Exo 2',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  --f-num:'JetBrains Mono',ui-monospace,'SFMono-Regular',Consolas,monospace;
+
+  --radio:18px;
+  --suave:cubic-bezier(.2,.8,.2,1);
+  --rebote:cubic-bezier(.34,1.56,.64,1);
+}
+
+/* =====================================================================
+   2. BASE
+   ===================================================================== */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+[hidden]{display:none !important}
+html{color-scheme:dark;-webkit-text-size-adjust:100%}
+body{
+  min-height:100vh;
+  font-family:var(--f-texto);
+  color:var(--texto);
+  background:
+    radial-gradient(1100px 700px at 10% -10%, rgba(26,15,61,.95) 0%, transparent 60%),
+    radial-gradient(900px 600px at 110% 0%, rgba(14,30,80,.8) 0%, transparent 60%),
+    linear-gradient(180deg, var(--fondo-1) 0%, var(--fondo-0) 70%);
+  background-color:var(--fondo-0);
+  overflow-x:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+button,input{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--cian);outline-offset:3px;border-radius:8px}
+kbd{
+  font-family:var(--f-num);font-size:.75em;padding:2px 6px;border-radius:6px;
+  border:1px solid rgba(142,154,214,.35);background:rgba(255,255,255,.04);color:var(--texto);
+}
+sub{font-size:.68em}
+
+/* Capas fijas del fondo */
+#fondo,#chispas{position:fixed;inset:0;width:100%;height:100%;pointer-events:none}
+#fondo{z-index:0}
+#chispas{z-index:200}
+
+/* Auroras: manchas de color que flotan lentamente (solo usan transform → muy eficiente) */
+.aurora{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+.aurora span{
+  position:absolute;width:60vmax;height:60vmax;border-radius:50%;
+  animation:flotar 26s ease-in-out infinite alternate;
+}
+.aurora span:nth-child(1){background:radial-gradient(circle,rgba(162,89,255,.22),transparent 62%);top:-25vmax;left:-15vmax}
+.aurora span:nth-child(2){background:radial-gradient(circle,rgba(0,229,255,.13),transparent 62%);bottom:-30vmax;right:-20vmax;animation-duration:32s;animation-delay:-8s}
+.aurora span:nth-child(3){background:radial-gradient(circle,rgba(255,62,165,.08),transparent 62%);top:30%;left:35%;animation-duration:38s;animation-delay:-16s}
+@keyframes flotar{
+  0%{transform:translate3d(0,0,0) scale(1)}
+  50%{transform:translate3d(6vmax,4vmax,0) scale(1.12)}
+  100%{transform:translate3d(-4vmax,7vmax,0) scale(.95)}
+}
+
+/* =====================================================================
+   3. PANTALLA DE INICIO
+   ===================================================================== */
+.intro{
+  position:fixed;inset:0;z-index:100;display:grid;place-items:center;
+  padding:24px 16px;overflow-y:auto;
+  background:radial-gradient(ellipse at 50% 40%, rgba(11,15,46,.55), rgba(5,6,26,.92) 75%);
+  transition:opacity .7s var(--suave),transform .7s var(--suave),visibility 0s 0s;
+}
+.intro.oculta{opacity:0;visibility:hidden;transform:scale(1.05);pointer-events:none;
+  transition:opacity .6s var(--suave),transform .6s var(--suave),visibility 0s .6s}
+.intro-caja{position:relative;z-index:2;max-width:860px;width:100%;text-align:center}
+.intro-etiqueta{
+  display:inline-flex;align-items:center;gap:10px;font-family:var(--f-num);font-size:.72rem;
+  letter-spacing:.25em;color:var(--cian);padding:6px 14px;border-radius:99px;
+  border:1px solid rgba(0,229,255,.3);background:rgba(0,229,255,.06);
+  animation:aparecer .8s var(--suave) both;
+}
+.intro-titulo{
+  margin:22px 0 8px;font-family:var(--f-titulo);font-weight:900;
+  font-size:clamp(2.6rem,12vw,7.2rem);letter-spacing:.05em;line-height:1;
+  display:flex;justify-content:center;flex-wrap:nowrap;
+  filter:drop-shadow(0 0 24px rgba(0,229,255,.35));
+}
+/* Efecto "Split/Blur Text": cada letra entra desenfocada y sube */
+.letra{
+  display:inline-block;
+  background:linear-gradient(90deg,var(--cian),var(--texto) 50%,var(--violeta));
+  background-size:calc(var(--n) * 100%) 100%;
+  background-position:calc(var(--i) / (var(--n) - 1) * 100%) 0;
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+  opacity:0;transform:translateY(.45em) scale(.9);filter:blur(12px);
+  animation:letraEntra 1s var(--suave) forwards;
+  animation-delay:calc(var(--i) * 75ms + 200ms);
+}
+@keyframes letraEntra{to{opacity:1;transform:none;filter:blur(0)}}
+.intro-sub{
+  font-family:var(--f-num);letter-spacing:.32em;font-size:clamp(.72rem,2.4vw,.95rem);
+  color:var(--texto-2);min-height:1.4em;
+}
+.intro-texto{
+  max-width:560px;margin:20px auto 30px;color:#c4cdf3;line-height:1.6;font-size:1.02rem;
+  animation:aparecer .9s .9s var(--suave) both;
+}
+.intro-texto b{color:var(--texto)}
+.intro-modos{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;max-width:680px;margin:0 auto}
+.modo-tarjeta{
+  text-align:left;padding:22px 20px;display:flex;flex-direction:column;gap:8px;border:0;
+  animation:aparecer .9s var(--suave) both;
+  transition:transform .35s var(--suave),box-shadow .35s;
+}
+.modo-tarjeta:nth-child(1){animation-delay:1.1s}
+.modo-tarjeta:nth-child(2){animation-delay:1.25s}
+.modo-tarjeta:hover{transform:translateY(-6px);box-shadow:0 24px 60px -20px rgba(0,229,255,.45)}
+.modo-tarjeta svg{width:34px;height:34px;color:var(--cian);filter:drop-shadow(0 0 8px rgba(0,229,255,.6))}
+.modo-tarjeta:nth-child(2) svg{color:var(--magenta);filter:drop-shadow(0 0 8px rgba(255,62,165,.6))}
+.modo-tarjeta b{font-family:var(--f-titulo);font-size:1.05rem;letter-spacing:.06em}
+.modo-tarjeta span{color:var(--texto-2);font-size:.92rem;line-height:1.45}
+.modo-tarjeta i{font-style:normal;font-family:var(--f-num);font-size:.78rem;color:var(--cian);margin-top:6px;letter-spacing:.12em}
+.modo-tarjeta:nth-child(2) i{color:var(--magenta)}
+.intro-atajos{margin-top:26px;color:var(--texto-2);font-size:.85rem;animation:aparecer .9s 1.5s var(--suave) both}
+.intro-trayectoria{position:absolute;left:0;right:0;bottom:0;width:100%;height:46vh;z-index:1;opacity:.55;pointer-events:none}
+.intro-trayectoria path{stroke-dasharray:6 10;animation:hormigas 1.4s linear infinite}
+@keyframes hormigas{to{stroke-dashoffset:-32}}
+@keyframes aparecer{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
+
+/* =====================================================================
+   4. ESTRUCTURA DE LA APLICACIÓN
+   ===================================================================== */
+.app{position:relative;z-index:1;max-width:1440px;margin:0 auto;padding:14px clamp(12px,2vw,24px) 28px}
+
+/* Animación de entrada escalonada de los paneles */
+.entrada{opacity:0;transform:translateY(26px)}
+.app-lista .entrada{animation:entrar .9s var(--suave) forwards;animation-delay:calc(var(--d,0) * 90ms)}
+@keyframes entrar{to{opacity:1;transform:none}}
+
+/* --- Barra superior --- */
+.barra{display:flex;align-items:center;justify-content:space-between;gap:12px 18px;flex-wrap:wrap;margin-bottom:14px}
+.logo{display:flex;align-items:center;gap:12px;text-decoration:none;color:inherit}
+.logo svg{width:40px;height:40px;flex:none}
+.logo strong{display:block;font-family:var(--f-titulo);font-weight:900;letter-spacing:.14em;font-size:1.1rem;
+  background:linear-gradient(90deg,var(--cian),var(--texto),var(--violeta));background-size:200% 100%;
+  -webkit-background-clip:text;background-clip:text;color:transparent;animation:brilloTexto 6s linear infinite}
+.logo small{display:block;font-size:.75rem;color:var(--texto-2);letter-spacing:.06em}
+@keyframes brilloTexto{to{background-position:-200% 0}}
+
+.pestanas{position:relative;display:flex;padding:4px;border-radius:14px;background:rgba(14,19,56,.75);border:1px solid rgba(90,110,220,.25)}
+.pestanas-indicador{
+  position:absolute;top:4px;bottom:4px;left:0;border-radius:10px;
+  background:linear-gradient(135deg,rgba(0,229,255,.22),rgba(162,89,255,.28));
+  box-shadow:0 0 0 1px rgba(0,229,255,.45) inset,0 0 22px -4px rgba(0,229,255,.55);
+  transition:transform .45s var(--rebote),width .45s var(--suave);
+}
+.pestana{position:relative;z-index:1;border:0;background:none;padding:9px 18px;border-radius:10px;
+  font-weight:600;color:var(--texto-2);transition:color .3s;white-space:nowrap}
+.pestana.activa{color:var(--texto)}
+.barra-acciones{display:flex;gap:8px}
+.btn-icono{
+  width:42px;height:42px;display:grid;place-items:center;border-radius:12px;
+  border:1px solid rgba(90,110,220,.3);background:rgba(14,19,56,.75);color:var(--texto-2);
+  transition:color .25s,border-color .25s,box-shadow .25s,transform .2s var(--rebote);
+}
+.btn-icono:hover{color:var(--cian);border-color:rgba(0,229,255,.55);box-shadow:0 0 18px -6px var(--cian)}
+.btn-icono:active{transform:scale(.92)}
+.btn-icono svg{width:20px;height:20px}
+
+/* --- Rejilla principal --- */
+.tablero{display:grid;gap:14px;align-items:start;grid-template-columns:minmax(0,1fr) 370px}
+.col{display:flex;flex-direction:column;gap:14px;min-width:0}
+.escenario{grid-area:esc}
+.controles{grid-area:ctl}
+.datos{grid-area:dat}
+.formulas{grid-area:for}
+.bitacora{grid-area:bit}
+
+/* =====================================================================
+   5. TARJETAS CON "SPOTLIGHT" (brillo que sigue al ratón)
+   ===================================================================== */
+.tarjeta{
+  position:relative;isolation:isolate;border-radius:var(--radio);
+  background:linear-gradient(180deg,rgba(20,26,72,.84),rgba(9,12,38,.9));
+  border:1px solid rgba(90,110,220,.22);
+  box-shadow:0 20px 50px -24px rgba(0,0,0,.9),inset 0 1px 0 rgba(255,255,255,.04);
+}
+.tarjeta::before{
+  content:"";position:absolute;inset:0;border-radius:inherit;z-index:-1;pointer-events:none;
+  background:radial-gradient(420px circle at var(--mx,50%) var(--my,-30%),rgba(0,229,255,.09),transparent 45%);
+}
+.tarjeta::after{
+  content:"";position:absolute;inset:-1px;border-radius:inherit;padding:1px;pointer-events:none;
+  background:radial-gradient(260px circle at var(--mx,50%) var(--my,-30%),rgba(0,229,255,.75),rgba(162,89,255,.35) 45%,transparent 70%);
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;mask-composite:exclude;
+  opacity:0;transition:opacity .35s;
+}
+.tarjeta:hover::after{opacity:1}
+.titulo-seccion{
+  display:flex;align-items:center;gap:10px;font-family:var(--f-titulo);font-size:.78rem;
+  letter-spacing:.2em;color:var(--texto-2);text-transform:uppercase;font-weight:600;
+}
+.titulo-seccion::before{content:"";width:16px;height:2px;border-radius:2px;background:linear-gradient(90deg,var(--cian),var(--violeta));box-shadow:0 0 8px var(--cian)}
+
+/* =====================================================================
+   6. ESCENARIO (CANVAS + HUD)
+   ===================================================================== */
+.escenario{padding:12px;background:linear-gradient(180deg,rgba(14,19,56,.6),rgba(7,9,30,.55))}
+.escenario-cabecera{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:2px 4px 10px;flex-wrap:wrap}
+.escenario-cabecera h2{font-family:var(--f-titulo);font-size:.95rem;letter-spacing:.18em;font-weight:800;display:flex;align-items:center;gap:10px}
+.punto-vivo{width:8px;height:8px;border-radius:50%;background:var(--verde);box-shadow:0 0 10px var(--verde);animation:latido 1.6s ease-in-out infinite;flex:none}
+@keyframes latido{50%{opacity:.35;transform:scale(.75)}}
+.chip-planeta{display:flex;align-items:center;gap:8px;font-family:var(--f-num);font-size:.78rem;color:var(--texto-2);
+  padding:5px 12px 5px 6px;border-radius:99px;border:1px solid rgba(90,110,220,.3);background:rgba(5,6,26,.5)}
+.chip-planeta b{color:var(--texto);font-weight:600}
+
+.lienzo-marco{
+  position:relative;height:clamp(300px,58vh,640px);border-radius:12px;overflow:hidden;
+  background:radial-gradient(ellipse at 50% 115%,rgba(162,89,255,.16),transparent 60%),rgba(5,6,26,.35);
+  border:1px solid rgba(0,229,255,.14);
+}
+.lienzo-marco canvas{display:block;width:100%;height:100%;touch-action:manipulation}
+/* Líneas de escaneo tipo monitor */
+.lienzo-marco::after{content:"";position:absolute;inset:0;pointer-events:none;
+  background:repeating-linear-gradient(180deg,transparent 0 3px,rgba(255,255,255,.018) 3px 4px)}
+.lienzo-marco.impacto{animation:impactoMarco .8s var(--suave)}
+@keyframes impactoMarco{0%{box-shadow:0 0 0 2px var(--verde),0 0 60px rgba(61,255,162,.6)}100%{box-shadow:0 0 0 0 transparent}}
+/* Esquinas HUD */
+.esquina{position:absolute;width:18px;height:18px;border:2px solid var(--cian);opacity:.7;pointer-events:none;animation:esquinas 3s ease-in-out infinite}
+.esquina.e1{top:6px;left:6px;border-right:0;border-bottom:0;border-top-left-radius:6px}
+.esquina.e2{top:6px;right:6px;border-left:0;border-bottom:0;border-top-right-radius:6px}
+.esquina.e3{bottom:6px;left:6px;border-right:0;border-top:0;border-bottom-left-radius:6px}
+.esquina.e4{bottom:6px;right:6px;border-left:0;border-top:0;border-bottom-right-radius:6px}
+@keyframes esquinas{50%{opacity:.3}}
+
+/* HUD con datos del vuelo en tiempo real */
+.hud{
+  position:absolute;top:12px;left:12px;right:12px;display:flex;flex-wrap:wrap;gap:6px;pointer-events:none;
+  font-family:var(--f-num);font-size:.76rem;
+}
+.hud-item{display:flex;align-items:baseline;gap:6px;padding:5px 10px;border-radius:8px;
+  background:rgba(5,6,26,.72);border:1px solid rgba(0,229,255,.2);color:var(--texto-2)}
+.hud-item b{color:var(--texto);font-weight:600;min-width:4.6ch;text-align:right}
+.hud-item i{font-style:normal;color:var(--texto-2);font-size:.9em}
+.hud-item.rapida{border-color:rgba(255,194,75,.5);color:var(--ambar)}
+.hud-item.rapida b{color:var(--ambar);min-width:0}
+
+/* Aviso flotante (toast) */
+.aviso{
+  position:absolute;left:50%;top:58px;z-index:3;max-width:min(92%,560px);
+  transform:translate(-50%,-10px) scale(.96);opacity:0;pointer-events:none;
+  padding:10px 16px;border-radius:12px;text-align:center;font-size:.92rem;line-height:1.45;
+  background:rgba(8,10,34,.92);border:1px solid rgba(0,229,255,.45);
+  box-shadow:0 10px 40px -10px rgba(0,229,255,.5);
+  transition:opacity .35s var(--suave),transform .45s var(--rebote);
+}
+.aviso.visible{opacity:1;transform:translate(-50%,0) scale(1)}
+.aviso b{font-family:var(--f-titulo);letter-spacing:.06em}
+.aviso.exito{border-color:var(--verde);box-shadow:0 10px 40px -8px rgba(61,255,162,.55)}
+.aviso.exito b{color:var(--verde)}
+.aviso.fallo{border-color:rgba(255,62,165,.6);box-shadow:0 10px 40px -10px rgba(255,62,165,.5)}
+.aviso.fallo b{color:var(--magenta)}
+.aviso small{display:block;color:var(--texto-2);font-size:.82rem;margin-top:2px}
+
+/* =====================================================================
+   7. PANEL DE CONTROLES
+   ===================================================================== */
+.controles{padding:18px;display:flex;flex-direction:column;gap:18px}
+.bloque{display:flex;flex-direction:column;gap:14px}
+
+/* --- Sliders --- */
+.control{display:flex;flex-direction:column;gap:4px}
+.control-cabecera{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.control label{font-weight:600;font-size:.94rem;display:flex;align-items:center;gap:8px}
+.sim{font-family:var(--f-num);font-style:italic;color:var(--cian);font-size:.9em}
+.valor{display:flex;align-items:baseline;gap:4px;padding:3px 8px 3px 4px;border-radius:9px;
+  background:rgba(5,6,26,.6);border:1px solid rgba(90,110,220,.3);transition:border-color .25s,box-shadow .25s}
+.valor:focus-within{border-color:var(--cian);box-shadow:0 0 14px -4px var(--cian)}
+.valor input{width:4.6ch;border:0;background:none;text-align:right;font-family:var(--f-num);font-weight:700;font-size:1rem;color:var(--texto)}
+.valor input:focus{outline:none}
+.valor input::-webkit-outer-spin-button,.valor input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.valor input[type=number]{-moz-appearance:textfield;appearance:textfield}
+.valor span{font-family:var(--f-num);font-size:.75rem;color:var(--texto-2)}
+.control-limites{display:flex;justify-content:space-between;font-family:var(--f-num);font-size:.68rem;color:rgba(142,154,214,.7)}
+.candado{display:none;color:var(--ambar);width:15px;height:15px}
+.control.bloqueado .candado{display:inline-block}
+.control.bloqueado input[type=range]{opacity:.45;cursor:not-allowed}
+.control.bloqueado .valor{opacity:.7}
+.control .nota-bloqueo{display:none;font-size:.75rem;color:var(--ambar)}
+.control.bloqueado .nota-bloqueo{display:block}
+
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:28px;background:transparent;cursor:pointer;--pct:50%}
+input[type=range]:focus{outline:none}
+input[type=range]::-webkit-slider-runnable-track{
+  height:6px;border-radius:6px;
+  background:linear-gradient(90deg,var(--cian),var(--violeta)) 0 0/var(--pct) 100% no-repeat,rgba(120,140,255,.16);
+}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:20px;height:20px;margin-top:-7px;border-radius:50%;
+  background:radial-gradient(circle,#fff 0 28%,var(--cian) 32% 58%,#0b0f2e 62%);
+  box-shadow:0 0 0 3px rgba(0,229,255,.18),0 0 16px var(--cian);
+  transition:transform .2s var(--rebote),box-shadow .25s;
+}
+input[type=range]:hover::-webkit-slider-thumb{transform:scale(1.12)}
+input[type=range]:active::-webkit-slider-thumb{transform:scale(1.3);box-shadow:0 0 0 8px rgba(0,229,255,.14),0 0 26px var(--cian)}
+input[type=range]:focus-visible::-webkit-slider-thumb{box-shadow:0 0 0 4px var(--fondo-0),0 0 0 6px var(--cian)}
+input[type=range]::-moz-range-track{height:6px;border-radius:6px;background:rgba(120,140,255,.16)}
+input[type=range]::-moz-range-progress{height:6px;border-radius:6px;background:linear-gradient(90deg,var(--cian),var(--violeta))}
+input[type=range]::-moz-range-thumb{width:18px;height:18px;border:0;border-radius:50%;
+  background:radial-gradient(circle,#fff 0 28%,var(--cian) 32% 58%,#0b0f2e 62%);
+  box-shadow:0 0 0 3px rgba(0,229,255,.18),0 0 16px var(--cian);transition:transform .2s var(--rebote)}
+input[type=range]:active::-moz-range-thumb{transform:scale(1.3)}
+
+/* --- Botones de opción (planetas y niveles) --- */
+.opciones{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.opcion{
+  position:relative;display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 4px 8px;
+  border-radius:12px;border:1px solid rgba(90,110,220,.25);background:rgba(5,6,26,.45);
+  transition:transform .3s var(--rebote),border-color .25s,background .25s,box-shadow .25s;
+}
+.opcion:hover{transform:translateY(-3px);border-color:rgba(0,229,255,.45)}
+.opcion:active{transform:scale(.95)}
+.opcion.activo{border-color:var(--cian);background:rgba(0,229,255,.1);box-shadow:0 0 0 1px rgba(0,229,255,.35) inset,0 0 22px -6px var(--cian)}
+.opcion b{font-size:.78rem;font-weight:600;letter-spacing:-.01em;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.opcion small{font-family:var(--f-num);font-size:.68rem;color:var(--texto-2)}
+.esfera{width:26px;height:26px;border-radius:50%;box-shadow:0 0 14px -2px currentColor;transition:transform .5s var(--rebote)}
+.opcion:hover .esfera{transform:rotate(25deg) scale(1.12)}
+.esfera.tierra{color:#1d6fd6;background:radial-gradient(circle at 32% 30%,#9ff0ff,#1d6fd6 55%,#0a1f4d)}
+.esfera.luna{color:#9aa3c7;background:radial-gradient(circle at 32% 30%,#f5f7ff,#9aa3c7 55%,#3a3f5c)}
+.esfera.marte{color:#d2552c;background:radial-gradient(circle at 32% 30%,#ffc09a,#d2552c 55%,#4a140c)}
+.esfera.jupiter{color:#c98a4b;background:repeating-linear-gradient(170deg,rgba(120,70,35,.45) 0 3px,transparent 3px 6px),radial-gradient(circle at 32% 30%,#ffe7bd,#c98a4b 55%,#4a2a16)}
+.chip-planeta .esfera{width:18px;height:18px}
+
+/* --- Interruptores --- */
+.interruptores{display:flex;flex-wrap:wrap;gap:12px 22px}
+.interruptor{display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none;font-size:.92rem;position:relative}
+.interruptor input{position:absolute;opacity:0;width:1px;height:1px}
+.riel{flex:none;width:42px;height:24px;border-radius:24px;position:relative;background:rgba(120,140,255,.16);
+  border:1px solid rgba(120,140,255,.3);transition:background .3s,border-color .3s,box-shadow .3s}
+.riel::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:var(--texto-2);
+  transition:transform .4s var(--rebote),background .3s,box-shadow .3s}
+.interruptor input:checked + .riel{background:rgba(0,229,255,.2);border-color:var(--cian);box-shadow:0 0 14px -3px var(--cian)}
+.interruptor input:checked + .riel::after{transform:translateX(18px);background:var(--cian);box-shadow:0 0 10px var(--cian)}
+.interruptor input:focus-visible + .riel{outline:2px solid var(--cian);outline-offset:2px}
+.interruptor input:disabled + .riel,.interruptor input:disabled ~ span{opacity:.4;cursor:not-allowed}
+
+/* --- Botón LANZAR (brillo + imán + onda) --- */
+.acciones{display:flex;gap:10px}
+.btn-lanzar{
+  position:relative;overflow:hidden;flex:1;display:flex;align-items:center;justify-content:center;gap:10px;
+  padding:16px 20px;border:0;border-radius:14px;
+  font-family:var(--f-titulo);font-weight:800;letter-spacing:.16em;font-size:1rem;color:#05061A;
+  background:linear-gradient(135deg,var(--cian),#7DB6FF 48%,var(--violeta));
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.2),0 10px 30px -8px rgba(0,229,255,.6),0 0 44px -12px rgba(162,89,255,.8);
+  transition:transform .3s var(--suave),box-shadow .3s,filter .3s,opacity .3s,scale .15s;
+}
+.btn-lanzar svg{width:20px;height:20px}
+.btn-lanzar::before{content:"";position:absolute;top:0;left:-60%;width:40%;height:100%;
+  background:linear-gradient(100deg,transparent,rgba(255,255,255,.7),transparent);transform:skewX(-20deg);
+  animation:barrido 3.4s ease-in-out infinite}
+@keyframes barrido{0%,62%{left:-60%}100%{left:135%}}
+.btn-lanzar:hover{filter:brightness(1.1);box-shadow:inset 0 0 0 1px rgba(255,255,255,.3),0 14px 40px -6px rgba(0,229,255,.75),0 0 60px -10px rgba(162,89,255,.9)}
+.btn-lanzar:active{scale:.96}
+.btn-lanzar:disabled{opacity:.5;cursor:wait;filter:saturate(.6)}
+.btn-lanzar:disabled::before{animation:none}
+.onda-clic{position:absolute;border-radius:50%;background:rgba(255,255,255,.55);transform:translate(-50%,-50%) scale(0);
+  animation:onda .65s var(--suave) forwards;pointer-events:none}
+@keyframes onda{to{transform:translate(-50%,-50%) scale(1);opacity:0}}
+
+.btn-sec{
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:12px 16px;border-radius:14px;
+  border:1px solid rgba(90,110,220,.35);background:rgba(5,6,26,.5);color:var(--texto);font-weight:600;font-size:.9rem;
+  transition:border-color .25s,box-shadow .25s,transform .2s var(--rebote),color .25s;
+}
+.btn-sec:hover{border-color:var(--violeta);box-shadow:0 0 20px -6px var(--violeta)}
+.btn-sec:active{transform:scale(.95)}
+.btn-sec svg{width:17px;height:17px}
+.btn-mini{padding:7px 12px;font-size:.8rem;border-radius:10px}
+.atajos{font-size:.78rem;color:var(--texto-2);line-height:1.9}
+
+/* --- Panel del desafío --- */
+.estadisticas{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.stat{padding:10px 6px;border-radius:12px;text-align:center;background:rgba(5,6,26,.5);border:1px solid rgba(90,110,220,.22);transition:border-color .3s,box-shadow .3s}
+.stat span{display:flex;align-items:center;justify-content:center;gap:4px;font-size:.66rem;letter-spacing:.12em;text-transform:uppercase;color:var(--texto-2)}
+.stat svg{width:12px;height:12px}
+.stat b{display:block;font-family:var(--f-num);font-size:1.25rem;margin-top:3px}
+.stat.puntos b{color:var(--cian);text-shadow:0 0 14px rgba(0,229,255,.6)}
+.stat.racha.caliente{border-color:var(--ambar);box-shadow:0 0 22px -6px var(--ambar)}
+.stat.racha.caliente b,.stat.racha.caliente svg{color:var(--ambar)}
+.stat.racha.caliente svg{animation:llama .5s ease-in-out infinite alternate}
+@keyframes llama{to{transform:scale(1.25) rotate(-6deg)}}
+.stat.salto{animation:salto .5s var(--rebote)}
+@keyframes salto{40%{transform:scale(1.12)}}
+.nivel-desc{font-size:.84rem;color:var(--texto-2);line-height:1.5;min-height:2.6em}
+.objetivo-info{display:flex;align-items:center;gap:12px;padding:12px;border-radius:14px;
+  background:linear-gradient(90deg,rgba(255,62,165,.12),rgba(255,62,165,.02));border:1px solid rgba(255,62,165,.35)}
+.objetivo-info svg{width:30px;height:30px;color:var(--magenta);flex:none;animation:girar 8s linear infinite;filter:drop-shadow(0 0 6px var(--magenta))}
+@keyframes girar{to{transform:rotate(360deg)}}
+.objetivo-info div{flex:1;min-width:0}
+.objetivo-info small{display:block;font-size:.7rem;letter-spacing:.14em;text-transform:uppercase;color:var(--texto-2)}
+.objetivo-info b{display:block;font-family:var(--f-num);font-size:1.1rem;color:var(--texto)}
+.objetivo-info span{display:block;font-family:var(--f-num);font-size:.74rem;color:var(--texto-2)}
+
+/* =====================================================================
+   8. TARJETAS DE DATOS
+   ===================================================================== */
+.datos{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+.dato{padding:14px 16px 12px;overflow:hidden}
+.dato .linea{position:absolute;left:0;right:0;top:0;height:2px;background:linear-gradient(90deg,transparent,var(--acento),transparent);opacity:.8}
+.dato header{display:flex;justify-content:space-between;align-items:center;gap:6px;font-size:.8rem;color:var(--texto-2);font-weight:600}
+.dato header em{font-family:var(--f-num);color:var(--acento);font-style:italic;font-size:.95rem}
+.dato-valor{display:flex;align-items:baseline;gap:6px;margin:6px 0 4px;white-space:nowrap}
+.dato-valor b{font-family:var(--f-num);font-size:clamp(1.3rem,2.1vw,1.85rem);font-weight:700;
+  text-shadow:0 0 18px color-mix(in srgb,var(--acento) 55%,transparent)}
+.dato-valor b.oculto{color:var(--acento);animation:parpadeo 1.6s steps(2) infinite}
+@keyframes parpadeo{50%{opacity:.45}}
+.dato-valor span{font-family:var(--f-num);font-size:.8rem;color:var(--texto-2)}
+.dato-valor .sep{color:var(--texto-2);font-size:1rem}
+.dato-tag{display:inline-flex;align-items:center;gap:6px;font-size:.68rem;letter-spacing:.08em;text-transform:uppercase;color:var(--texto-2)}
+.dato-tag::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--verde);box-shadow:0 0 8px var(--verde)}
+.dato-tag.ultimo::before{background:var(--violeta);box-shadow:0 0 8px var(--violeta)}
+.dato-tag.calcula::before{background:var(--ambar);box-shadow:0 0 8px var(--ambar)}
+.dato-pie{display:block;font-family:var(--f-num);font-size:.7rem;color:rgba(142,154,214,.75);margin-top:4px}
+
+/* =====================================================================
+   9. FÓRMULAS Y BITÁCORA
+   ===================================================================== */
+.formulas,.bitacora{padding:18px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.lista-formulas{list-style:none;display:flex;flex-direction:column;gap:10px;counter-reset:f}
+.lista-formulas li{counter-increment:f;padding:10px 12px 10px 44px;position:relative;border-radius:12px;background:rgba(5,6,26,.42);border:1px solid rgba(90,110,220,.16)}
+.lista-formulas li::before{content:counter(f);position:absolute;left:12px;top:10px;width:22px;height:22px;border-radius:7px;display:grid;place-items:center;
+  font-family:var(--f-num);font-size:.75rem;color:var(--cian);border:1px solid rgba(0,229,255,.4);background:rgba(0,229,255,.08)}
+.f-titulo{font-size:.8rem;color:var(--texto-2);margin-bottom:4px;font-weight:600}
+.f-linea{font-family:var(--f-num);font-size:.86rem;line-height:1.75;display:flex;flex-wrap:wrap;column-gap:8px;overflow-wrap:anywhere}
+.f-def{color:var(--texto)}
+.f-sus{color:var(--texto-2)}
+.f-sus b{color:var(--cian);font-weight:700}
+.f-sus b.oculto{color:var(--ambar)}
+.f-nota{font-size:.76rem;color:rgba(142,154,214,.8);font-family:var(--f-texto);margin-top:2px}
+.aviso-calcula{font-size:.84rem;color:var(--ambar);padding:10px 12px;border-radius:12px;border:1px dashed rgba(255,194,75,.45);background:rgba(255,194,75,.06)}
+.sabias{display:flex;gap:12px;align-items:flex-start;padding:12px;border-radius:12px;background:linear-gradient(90deg,rgba(162,89,255,.14),transparent);border:1px solid rgba(162,89,255,.3)}
+.sabias svg{width:24px;height:24px;color:var(--violeta);flex:none;margin-top:2px}
+.sabias div{flex:1}
+.sabias b{font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;color:var(--violeta)}
+.sabias p{font-size:.9rem;line-height:1.5;margin-top:2px;transition:opacity .25s}
+
+.bitacora-cabecera{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.tabla-scroll{overflow-x:auto;border-radius:12px;border:1px solid rgba(90,110,220,.16)}
+table{width:100%;border-collapse:collapse;font-family:var(--f-num);font-size:.78rem;white-space:nowrap}
+th{position:sticky;top:0;text-align:right;font-weight:600;color:var(--texto-2);padding:9px 10px;background:rgba(14,19,56,.95);font-size:.72rem}
+td{text-align:right;padding:8px 10px;border-top:1px solid rgba(90,110,220,.12)}
+th:first-child,td:first-child{text-align:left;color:var(--texto-2)}
+tr.nueva td{animation:filaNueva 1.2s var(--suave)}
+@keyframes filaNueva{from{background:rgba(0,229,255,.18)}}
+tr.acierto td:last-child{color:var(--verde)}
+tr.corto td:last-child,tr.largo td:last-child{color:var(--magenta)}
+tr.vacia td{text-align:center;color:var(--texto-2);padding:22px 10px;font-family:var(--f-texto);white-space:normal}
+
+.pie{position:relative;z-index:1;text-align:center;color:rgba(142,154,214,.7);font-size:.8rem;padding:6px 16px 26px}
+
+/* =====================================================================
+   10. RESPONSIVE
+   ===================================================================== */
+@media (max-width:1080px){
+  /* Las columnas "desaparecen" y los paneles se reordenan en una sola columna */
+  .col{display:contents}
+  .tablero{grid-template-columns:minmax(0,1fr);grid-template-areas:"esc" "ctl" "dat" "for" "bit"}
+  .controles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px 24px}
+  .bloque.ancho{grid-column:1/-1}
+}
+@media (max-width:760px){
+  .app{padding-top:10px}
+  .barra{justify-content:center}
+  .logo{width:100%;justify-content:center}
+  /* En el celular el escenario se queda fijo arriba mientras mueves los sliders */
+  .escenario{position:sticky;top:0;z-index:20;padding:8px;border-radius:0 0 16px 16px;margin:0 calc(-1 * clamp(12px,2vw,24px));
+    background:#070920}
+  .escenario-cabecera{padding:0 2px 6px}
+  .escenario-cabecera h2{font-size:.8rem}
+  .lienzo-marco{height:44vh;height:44svh;min-height:230px}
+  .controles{grid-template-columns:minmax(0,1fr)}
+  .datos{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .hud{font-size:.68rem;gap:4px;top:8px;left:8px;right:8px}
+  .hud-item{padding:3px 7px}
+  .aviso{top:auto;bottom:42px;font-size:.84rem}
+  .btn-lanzar{letter-spacing:.08em;white-space:nowrap;padding:16px 12px}
+  .intro-modos{grid-template-columns:minmax(0,1fr)}
+}
+@media (max-width:400px){
+  .opciones.niveles,.estadisticas{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .pestana{padding:8px 12px;font-size:.88rem}
+}
+
+/* Accesibilidad: menos movimiento si el sistema lo pide */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+  .entrada{opacity:1;transform:none}
+  .letra{opacity:1;transform:none;filter:none}
+}
+</style>
+</head>
+
+<body>
+<!-- Capas de fondo: estrellas (canvas), auroras (CSS) y chispas al hacer clic (canvas) -->
+<canvas id="fondo" aria-hidden="true"></canvas>
+<div class="aurora" aria-hidden="true"><span></span><span></span><span></span></div>
+<canvas id="chispas" aria-hidden="true"></canvas>
+
+<!-- ===================== PANTALLA DE INICIO ===================== -->
+<section class="intro" id="intro" aria-labelledby="introTitulo">
+  <div class="intro-caja">
+    <p class="intro-etiqueta"><span class="punto-vivo"></span>SIMULADOR · CINEMÁTICA · v1.0</p>
+    <h1 class="intro-titulo" id="introTitulo" aria-label="Parábola">PARÁBOLA</h1>
+    <p class="intro-sub" id="introSub">LABORATORIO DE TIRO OBLICUO</p>
+    <p class="intro-texto">Ajusta la <b>velocidad</b>, el <b>ángulo</b> y la <b>altura</b> de lanzamiento, elige un planeta y descubre cómo la gravedad dibuja una parábola perfecta.</p>
+    <div class="intro-modos">
+      <button class="modo-tarjeta tarjeta" data-iniciar="libre">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 20c3-10 9-14 18-14" stroke-dasharray="2 3"/><circle cx="17" cy="8" r="2.4" fill="currentColor"/><path d="M3 20h18"/></svg>
+        <b>MODO LIBRE</b>
+        <span>Experimenta sin presión: cambia variables y mira las fórmulas en vivo.</span>
+        <i>ENTRAR →</i>
+      </button>
+      <button class="modo-tarjeta tarjeta" data-iniciar="desafio">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/></svg>
+        <b>MODO DESAFÍO</b>
+        <span>Acierta al objetivo con la menor cantidad de intentos. Suma puntos y rachas.</span>
+        <i>ACEPTAR MISIÓN →</i>
+      </button>
+    </div>
+    <p class="intro-atajos">Atajos: <kbd>Espacio</kbd> lanzar · <kbd>←</kbd> <kbd>→</kbd> ángulo · <kbd>↑</kbd> <kbd>↓</kbd> velocidad · <kbd>Shift</kbd> ajuste fino</p>
+  </div>
+  <!-- Trayectoria decorativa animada -->
+  <svg class="intro-trayectoria" viewBox="0 0 1000 400" preserveAspectRatio="xMidYMax meet" aria-hidden="true">
+    <defs><linearGradient id="gradIntro" x1="0" x2="1"><stop offset="0" stop-color="#00E5FF"/><stop offset="1" stop-color="#A259FF"/></linearGradient></defs>
+    <path d="M -20 400 Q 500 -240 1020 400" fill="none" stroke="url(#gradIntro)" stroke-width="2"/>
+    <circle r="7" fill="#EAF2FF"><animateMotion dur="5s" repeatCount="indefinite" path="M -20 400 Q 500 -240 1020 400"/></circle>
+  </svg>
+</section>
+
+<!-- ===================== APLICACIÓN ===================== -->
+<div class="app" id="app">
+  <header class="barra entrada" style="--d:0">
+    <a class="logo" href="#" id="logo" aria-label="Parábola: volver al menú">
+      <svg viewBox="0 0 40 40" aria-hidden="true">
+        <defs><linearGradient id="gLogo" x1="0" x2="1"><stop offset="0" stop-color="#00E5FF"/><stop offset="1" stop-color="#A259FF"/></linearGradient></defs>
+        <rect x="1" y="1" width="38" height="38" rx="11" fill="#0B0F2E" stroke="url(#gLogo)" stroke-width="1.5"/>
+        <path d="M7 32 Q20 -2 33 32" fill="none" stroke="url(#gLogo)" stroke-width="2" stroke-dasharray="3 3"/>
+        <circle cx="26.5" cy="15" r="3.4" fill="#EAF2FF"/>
+      </svg>
+      <span><strong>PARÁBOLA</strong><small>Laboratorio de tiro oblicuo</small></span>
+    </a>
+    <nav class="pestanas" role="tablist" aria-label="Modo de juego">
+      <span class="pestanas-indicador" aria-hidden="true"></span>
+      <button class="pestana activa" role="tab" aria-selected="true" data-modo="libre">Modo libre</button>
+      <button class="pestana" role="tab" aria-selected="false" data-modo="desafio">Modo desafío</button>
+    </nav>
+    <div class="barra-acciones">
+      <button class="btn-icono" id="btnSonido" aria-pressed="true" title="Sonido activado">
+        <svg id="icoSonido" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></svg>
+      </button>
+      <button class="btn-icono" id="btnMenu" title="Menú principal" aria-label="Menú principal">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.6"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="tablero">
+   <div class="col col-principal">
+    <!-- ===== Escenario ===== -->
+    <section class="escenario tarjeta entrada" style="--d:1" aria-label="Plano cartesiano del lanzamiento">
+      <div class="escenario-cabecera">
+        <h2><span class="punto-vivo"></span><span id="tituloModo">MODO LIBRE</span></h2>
+        <div class="chip-planeta"><span class="esfera tierra" id="chipEsfera"></span><span id="chipPlaneta"><b>Tierra</b> · g = 9,80 m/s²</span></div>
+      </div>
+      <div class="lienzo-marco" id="lienzoMarco">
+        <canvas id="juego" role="img" aria-label="Trayectoria del proyectil en el plano x-y"></canvas>
+        <div class="hud" id="hud" aria-hidden="true">
+          <div class="hud-item">t <b id="hudT">0,00</b><i>s</i></div>
+          <div class="hud-item">x <b id="hudX">0,00</b><i>m</i></div>
+          <div class="hud-item">y <b id="hudY">0,00</b><i>m</i></div>
+          <div class="hud-item">|v| <b id="hudV">0,00</b><i>m/s</i></div>
+          <div class="hud-item rapida" id="hudRapida" hidden>Cámara rápida <b id="hudRapidaTxt">×1,0</b></div>
+        </div>
+        <div class="aviso" id="aviso" role="status" aria-live="polite"></div>
+        <span class="esquina e1"></span><span class="esquina e2"></span><span class="esquina e3"></span><span class="esquina e4"></span>
+      </div>
+    </section>
+
+
+    <!-- ===== Datos principales ===== -->
+    <section class="datos entrada" style="--d:3" aria-label="Resultados">
+      <article class="dato tarjeta" style="--acento:var(--cian)">
+        <span class="linea"></span>
+        <header><span>Alcance</span><em>R</em></header>
+        <div class="dato-valor"><b id="datoR">0,00</b><span>m</span></div>
+        <span class="dato-tag">Predicción en vivo</span>
+      </article>
+      <article class="dato tarjeta" style="--acento:var(--violeta)">
+        <span class="linea"></span>
+        <header><span>Altura máxima</span><em>H</em></header>
+        <div class="dato-valor"><b id="datoH">0,00</b><span>m</span></div>
+        <span class="dato-tag">Predicción en vivo</span>
+      </article>
+      <article class="dato tarjeta" style="--acento:var(--magenta)">
+        <span class="linea"></span>
+        <header><span>Tiempo de vuelo</span><em>t<sub>v</sub></em></header>
+        <div class="dato-valor"><b id="datoTv">0,00</b><span>s</span></div>
+        <span class="dato-tag">Predicción en vivo</span>
+      </article>
+      <article class="dato tarjeta" style="--acento:var(--ambar)">
+        <span class="linea"></span>
+        <header><span>Componentes</span><em>v<sub>x</sub> · v<sub>y0</sub></em></header>
+        <div class="dato-valor"><b id="datoVx">0,0</b><span class="sep">·</span><b id="datoVy">0,0</b><span>m/s</span></div>
+        <span class="dato-pie">Iguales durante todo el vuelo: solo v<sub>x</sub></span>
+      </article>
+    </section>
+
+    <!-- ===== Fórmulas ===== -->
+    <section class="formulas tarjeta entrada" style="--d:4" aria-label="Fórmulas">
+      <div class="titulo-seccion">Fórmulas en acción</div>
+      <p class="aviso-calcula" id="avisoCalcula" hidden>En este nivel los resultados están ocultos. Usa las fórmulas para calcular el alcance y luego compruébalo lanzando.</p>
+      <ol class="lista-formulas">
+        <li>
+          <div class="f-titulo">Descomposición de la velocidad inicial</div>
+          <div class="f-linea"><span class="f-def">v<sub>x</sub> = v<sub>0</sub>·cos θ</span><span class="f-sus" id="fVx"></span></div>
+          <div class="f-linea"><span class="f-def">v<sub>y0</sub> = v<sub>0</sub>·sen θ</span><span class="f-sus" id="fVy"></span></div>
+        </li>
+        <li>
+          <div class="f-titulo">Ecuaciones de posición (MRU en x · MRUV en y)</div>
+          <div class="f-linea"><span class="f-def">x(t) = v<sub>x</sub>·t</span><span class="f-sus" id="fXt"></span></div>
+          <div class="f-linea"><span class="f-def">y(t) = h<sub>0</sub> + v<sub>y0</sub>·t − ½·g·t²</span><span class="f-sus" id="fYt"></span></div>
+        </li>
+        <li>
+          <div class="f-titulo">Altura máxima (cuando v<sub>y</sub> = 0)</div>
+          <div class="f-linea"><span class="f-def">t<sub>s</sub> = v<sub>y0</sub> / g</span><span class="f-sus" id="fTs"></span></div>
+          <div class="f-linea"><span class="f-def">H = h<sub>0</sub> + v<sub>y0</sub>² / (2g)</span><span class="f-sus" id="fH"></span></div>
+        </li>
+        <li>
+          <div class="f-titulo">Tiempo de vuelo (cuando y = 0)</div>
+          <div class="f-linea"><span class="f-def">t<sub>v</sub> = [v<sub>y0</sub> + √(v<sub>y0</sub>² + 2·g·h<sub>0</sub>)] / g</span><span class="f-sus" id="fTv"></span></div>
+        </li>
+        <li>
+          <div class="f-titulo">Alcance horizontal</div>
+          <div class="f-linea"><span class="f-def">R = v<sub>x</sub>·t<sub>v</sub></span><span class="f-sus" id="fR"></span></div>
+          <div class="f-nota">Caso especial h<sub>0</sub> = 0 → R = v<sub>0</sub>²·sen(2θ) / g</div>
+        </li>
+      </ol>
+      <div class="sabias">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/></svg>
+        <div><b>¿Sabías que…?</b><p id="tip"></p></div>
+        <button class="btn-sec btn-mini" id="btnTip" aria-label="Otro dato curioso">Otro</button>
+      </div>
+    </section>
+
+    <!-- ===== Bitácora ===== -->
+    <section class="bitacora tarjeta entrada" style="--d:5" aria-label="Bitácora de lanzamientos">
+      <div class="bitacora-cabecera">
+        <div class="titulo-seccion">Bitácora</div>
+        <button class="btn-sec btn-mini" id="btnBorrarBitacora">Borrar</button>
+      </div>
+      <div class="tabla-scroll">
+        <table>
+          <thead><tr><th>#</th><th>v₀</th><th>θ</th><th>h₀</th><th>Planeta</th><th>R (m)</th><th>H (m)</th><th>t<sub>v</sub> (s)</th><th>Resultado</th></tr></thead>
+          <tbody id="cuerpoBitacora"></tbody>
+        </table>
+      </div>
+    </section>
+   </div>
+
+   <!-- ===== Controles (columna lateral) ===== -->
+   <div class="col col-lateral">
+    <aside class="controles tarjeta entrada" style="--d:2" aria-label="Controles">
+
+      <!-- Panel exclusivo del modo desafío -->
+      <div class="bloque ancho" id="panelDesafio" hidden>
+        <div class="titulo-seccion">Misión</div>
+        <div class="estadisticas">
+          <div class="stat puntos"><span><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.8l2.8 5.8 6.3.9-4.6 4.4 1.1 6.3L12 17.2l-5.6 3 1.1-6.3L2.9 9.5l6.3-.9z"/></svg>Puntos</span><b id="statPuntos">0</b></div>
+          <div class="stat racha" id="cajaRacha"><span><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c1.2 3.4 4.8 5 4.8 9.6a4.8 4.8 0 0 1-9.6 0c0-1.9.8-3.2 1.9-4.3.2 1.6 1 2.5 1.9 2.8C10.6 7.5 10.8 4.6 12 2z"/></svg>Racha</span><b id="statRacha">0</b></div>
+          <div class="stat"><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/></svg>Intentos</span><b id="statIntentos">0</b></div>
+          <div class="stat"><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M8 4h8v5a4 4 0 0 1-8 0zM8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M8.5 20h7"/></svg>Récord</span><b id="statRecord">0</b></div>
+        </div>
+        <div class="titulo-seccion">Nivel de dificultad</div>
+        <div class="opciones niveles" role="radiogroup" aria-label="Nivel de dificultad">
+          <button class="opcion nivel activo" role="radio" aria-checked="true" data-nivel="cadete"><b>Cadete</b><small>×1</small></button>
+          <button class="opcion nivel" role="radio" aria-checked="false" data-nivel="piloto"><b>Piloto</b><small>×1,5</small></button>
+          <button class="opcion nivel" role="radio" aria-checked="false" data-nivel="comandante"><b>Comandante</b><small>×2</small></button>
+          <button class="opcion nivel" role="radio" aria-checked="false" data-nivel="leyenda"><b>Leyenda</b><small>×3</small></button>
+        </div>
+        <p class="nivel-desc" id="nivelDesc"></p>
+        <div class="objetivo-info">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><path d="M12 1v5M12 18v5M1 12h5M18 12h5"/></svg>
+          <div><small>Objetivo en</small><b id="objX">x = 0 m</b><span id="objAncho">ancho 0 m</span></div>
+          <button class="btn-sec btn-mini" id="btnSaltar" title="Genera otro objetivo (pierdes la racha)">Saltar</button>
+        </div>
+      </div>
+
+      <!-- Variables del lanzamiento -->
+      <div class="bloque">
+        <div class="titulo-seccion">Lanzamiento</div>
+        <div class="control" id="ctlV0">
+          <div class="control-cabecera">
+            <label for="rngV0">Velocidad inicial <span class="sim">v<sub>0</sub></span></label>
+            <div class="valor"><input type="number" id="numV0" min="1" max="50" step="0.1" inputmode="decimal" aria-label="Velocidad inicial en metros por segundo"><span>m/s</span></div>
+          </div>
+          <input type="range" id="rngV0" min="1" max="50" step="0.1">
+          <div class="control-limites"><span>1</span><span>50 m/s</span></div>
+        </div>
+        <div class="control" id="ctlAngulo">
+          <div class="control-cabecera">
+            <label for="rngAngulo">Ángulo <span class="sim">θ</span></label>
+            <div class="valor"><input type="number" id="numAngulo" min="0" max="90" step="0.5" inputmode="decimal" aria-label="Ángulo en grados"><span>°</span></div>
+          </div>
+          <input type="range" id="rngAngulo" min="0" max="90" step="0.5">
+          <div class="control-limites"><span>0°</span><span>90°</span></div>
+        </div>
+        <div class="control" id="ctlH0">
+          <div class="control-cabecera">
+            <label for="rngH0">Altura inicial <span class="sim">h<sub>0</sub></span>
+              <svg class="candado" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></label>
+            <div class="valor"><input type="number" id="numH0" min="0" max="40" step="0.5" inputmode="decimal" aria-label="Altura inicial en metros"><span>m</span></div>
+          </div>
+          <input type="range" id="rngH0" min="0" max="40" step="0.5">
+          <div class="control-limites"><span>0</span><span>40 m</span></div>
+          <span class="nota-bloqueo">Altura impuesta por el nivel Leyenda.</span>
+        </div>
+      </div>
+
+      <!-- Entorno: planeta y opciones -->
+      <div class="bloque">
+        <div class="titulo-seccion">Gravedad · planeta</div>
+        <div class="opciones" role="radiogroup" aria-label="Planeta">
+          <button class="opcion planeta activo" role="radio" aria-checked="true" data-planeta="tierra"><span class="esfera tierra"></span><b>Tierra</b><small>9,80</small></button>
+          <button class="opcion planeta" role="radio" aria-checked="false" data-planeta="luna"><span class="esfera luna"></span><b>Luna</b><small>1,62</small></button>
+          <button class="opcion planeta" role="radio" aria-checked="false" data-planeta="marte"><span class="esfera marte"></span><b>Marte</b><small>3,71</small></button>
+          <button class="opcion planeta" role="radio" aria-checked="false" data-planeta="jupiter"><span class="esfera jupiter"></span><b>Júpiter</b><small>24,79</small></button>
+        </div>
+        <div class="interruptores">
+          <label class="interruptor"><input type="checkbox" id="chkPrevia" checked><span class="riel"></span><span>Vista previa</span></label>
+          <label class="interruptor"><input type="checkbox" id="chkVectores" checked><span class="riel"></span><span>Vectores</span></label>
+        </div>
+      </div>
+
+      <div class="bloque ancho">
+        <div class="acciones">
+          <button class="btn-lanzar" id="btnLanzar">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 19c1-4 3-6.5 6-8l3 3c-1.5 3-4 5-8 6z"/><path d="M11 11c2.5-4.5 6-7 9-7 0 3-2.5 6.5-7 9"/><circle cx="15.5" cy="8.5" r="1.3"/></svg>
+            <span id="txtLanzar">LANZAR</span>
+          </button>
+          <button class="btn-sec" id="btnLimpiar" title="Borrar trayectorias anteriores">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>Limpiar
+          </button>
+        </div>
+        <p class="atajos"><kbd>Espacio</kbd> lanzar · <kbd>←</kbd><kbd>→</kbd> ángulo · <kbd>↑</kbd><kbd>↓</kbd> velocidad · <kbd>Shift</kbd> ajuste fino</p>
+      </div>
+    </aside>
+   </div>
+  </main>
+
+  <footer class="pie">Hecho con HTML, CSS y JavaScript puro · Modelo: tiro oblicuo ideal (sin resistencia del aire)</footer>
+</div>
+
+<script>
+'use strict';
+/* =====================================================================
+   PARÁBOLA · Laboratorio de tiro oblicuo
+   ---------------------------------------------------------------------
+   Índice del código:
+     1. Configuración (planetas, niveles, colores)
+     2. Utilidades
+     3. Estado del juego
+     4. Física del tiro oblicuo
+     5. Sonido (Web Audio, sin archivos)
+     6. Fondo de estrellas animado
+     7. Escena principal (canvas): cámara, cuadrícula, cañón, pelota, efectos
+     8. Interfaz: sliders, paneles de datos, fórmulas, bitácora
+     9. Modo desafío: objetivos, puntaje y rachas
+    10. Microinteracciones (chispas, spotlight, botón imán, texto descifrado)
+    11. Bucle principal e inicio
+   ===================================================================== */
+
+/* =====================================================================
+   1. CONFIGURACIÓN
+   ===================================================================== */
+const V0_MAX = 50;      // velocidad máxima permitida por el slider (m/s)
+const TAU = Math.PI * 2;
+const F_NUM = '"JetBrains Mono", ui-monospace, monospace';
+const F_TIT = 'Orbitron, "Exo 2", sans-serif';
+
+// Los mismos colores de la paleta CSS, para usarlos dentro del canvas
+const C = {
+  cian: '#00E5FF', violeta: '#A259FF', magenta: '#FF3EA5', verde: '#3DFFA2',
+  ambar: '#FFC24B', texto: '#EAF2FF', texto2: '#8E9AD6', blanco: '#FFFFFF'
+};
+
+// Planetas: gravedad (m/s²) y colores del suelo / esfera decorativa
+const PLANETAS = {
+  tierra:  { nombre: 'Tierra',  g: 9.8,   suelo: ['#0E3346', '#050A18'], linea: '#00E5FF', esfera: ['#9FF0FF', '#1D6FD6', '#0A1F4D'], semilla: 7 },
+  luna:    { nombre: 'Luna',    g: 1.62,  suelo: ['#353A52', '#0C0D1A'], linea: '#C9D4FF', esfera: ['#F5F7FF', '#9AA3C7', '#3A3F5C'], semilla: 21 },
+  marte:   { nombre: 'Marte',   g: 3.71,  suelo: ['#55231A', '#14070C'], linea: '#FF7A4D', esfera: ['#FFC09A', '#D2552C', '#4A140C'], semilla: 4 },
+  jupiter: { nombre: 'Júpiter', g: 24.79, suelo: ['#4A3726', '#130D10'], linea: '#FFC24B', esfera: ['#FFE7BD', '#C98A4B', '#4A2A16'], semilla: 13 }
+};
+
+/* Niveles del modo desafío.
+   rango: dónde puede aparecer el objetivo, como fracción del alcance máximo (v0máx²/g)
+   ancho: ancho del objetivo, también como fracción del alcance máximo
+   vistaPrevia: 'completa' | 'parcial' | 'ninguna'                                     */
+const NIVELES = {
+  cadete:     { nombre: 'Cadete',     mult: 1,   rango: [0.18, 0.50], ancho: 0.075, vistaPrevia: 'completa', ocultarDatos: false, alturaAleatoria: false,
+                desc: 'Objetivo grande y cercano. Vista previa completa y resultados visibles: ideal para empezar.' },
+  piloto:     { nombre: 'Piloto',     mult: 1.5, rango: [0.30, 0.70], ancho: 0.05,  vistaPrevia: 'parcial',  ocultarDatos: true,  alturaAleatoria: false,
+                desc: 'Solo ves el inicio de la trayectoria y los resultados se ocultan hasta lanzar.' },
+  comandante: { nombre: 'Comandante', mult: 2,   rango: [0.45, 0.85], ancho: 0.032, vistaPrevia: 'ninguna',  ocultarDatos: true,  alturaAleatoria: false,
+                desc: 'Sin vista previa: objetivo pequeño y lejano. ¡Calcula el alcance con las fórmulas!' },
+  leyenda:    { nombre: 'Leyenda',    mult: 3,   rango: [0.60, 0.95], ancho: 0.02,  vistaPrevia: 'ninguna',  ocultarDatos: true,  alturaAleatoria: true,
+                desc: 'Objetivo diminuto y muy lejano, sin vista previa, y la altura de lanzamiento la decide el nivel.' }
+};
+const ORDEN_NIVELES = ['cadete', 'piloto', 'comandante', 'leyenda'];
+const PUNTOS_BASE = [100, 70, 50, 35, 25, 15]; // puntos según el intento en que aciertas (1.º, 2.º, ...)
+
+const DATOS_CURIOSOS = [
+  'Si h₀ = 0, el alcance máximo se consigue con un ángulo de 45°.',
+  'Ángulos complementarios (por ejemplo 30° y 60°) dan el mismo alcance cuando h₀ = 0. ¡Compruébalo!',
+  'La velocidad horizontal vₓ nunca cambia: sin aire no hay ninguna fuerza horizontal.',
+  'En el punto más alto la velocidad vertical es cero, pero la pelota sigue moviéndose con vₓ.',
+  'En la Luna la gravedad es unas 6 veces menor que en la Tierra: con el mismo tiro, el alcance es unas 6 veces mayor.',
+  'El tiempo de vuelo depende de v_y0, h₀ y g, pero no de vₓ.',
+  'Si duplicas la velocidad inicial (con h₀ = 0), el alcance y la altura máxima se multiplican por 4.',
+  'Desde una altura h₀ > 0, el ángulo de alcance máximo es un poco menor que 45°.',
+  'Galileo Galilei fue el primero en demostrar que la trayectoria de un proyectil es una parábola (1638).'
+];
+
+/* =====================================================================
+   2. UTILIDADES
+   ===================================================================== */
+const $ = (sel, raiz = document) => raiz.querySelector(sel);
+const $$ = (sel, raiz = document) => [...raiz.querySelectorAll(sel)];
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const azar = (a, b) => a + Math.random() * (b - a);
+const reducirMov = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// Formatea números al estilo español (coma decimal): fmt(3.14159, 2) → "3,14"
+const formatos = {};
+function fmt(n, dec = 2) {
+  if (!Number.isFinite(n)) return '—';
+  if (Math.abs(n) < 0.5 * Math.pow(10, -dec)) n = 0; // evita "-0,00"
+  if (!formatos[dec]) formatos[dec] = new Intl.NumberFormat('es-ES', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+  return formatos[dec].format(n);
+}
+
+// Convierte "#RRGGBB" en "rgba(r,g,b,a)"
+function hexA(hex, a) {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+}
+
+// Generador pseudoaleatorio con semilla (para dibujar siempre el mismo planeta)
+function semilla(s) {
+  return () => {
+    s = (s + 0x6D2B79F5) | 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// Guardado local seguro (si el navegador lo bloquea, el juego sigue funcionando)
+const almacen = {
+  leer(clave, porDefecto) {
+    try { const v = localStorage.getItem(clave); return v === null ? porDefecto : JSON.parse(v); }
+    catch { return porDefecto; }
+  },
+  guardar(clave, valor) { try { localStorage.setItem(clave, JSON.stringify(valor)); } catch { /* sin almacenamiento */ } }
+};
+
+// Solo cambia el texto si es distinto (ahorra trabajo al navegador)
+function escribir(el, texto) { if (el.textContent !== texto) el.textContent = texto; }
+
+/* =====================================================================
+   3. ESTADO DEL JUEGO
+   ===================================================================== */
+const estado = {
+  modo: 'libre',          // 'libre' | 'desafio'
+  planeta: 'tierra',
+  v0: 20, angulo: 45, h0: 0,
+  vistaPrevia: true,
+  vectores: true,
+  vuelo: null,            // lanzamiento en curso o recién terminado
+  fantasmas: [],          // trayectorias anteriores (se dibujan tenues)
+  bitacora: [],
+  contador: 0,
+  ultimoTiro: null,       // último tiro lanzado (para niveles con datos ocultos)
+  introAbierta: true,
+  desafio: {
+    nivel: 'cadete', objetivo: null, intentos: 0, puntos: 0, racha: 0,
+    aciertos: 0, record: 0, esperando: false, temporizador: 0, recordAvisado: false
+  }
+};
+
+const planeta = () => PLANETAS[estado.planeta];
+const nivel = () => NIVELES[estado.desafio.nivel];
+
+// ¿Los resultados deben ocultarse? (niveles altos del desafío)
+const datosOcultos = () => estado.modo === 'desafio' && nivel().ocultarDatos;
+
+// Tipo de vista previa que corresponde ahora: 'completa' | 'parcial' | 'ninguna'
+function modoVistaPrevia() {
+  if (estado.modo === 'libre') return estado.vistaPrevia ? 'completa' : 'ninguna';
+  const n = nivel();
+  if (n.vistaPrevia === 'ninguna' || !estado.vistaPrevia) return 'ninguna';
+  return n.vistaPrevia;
+}
+
+/* =====================================================================
+   4. FÍSICA DEL TIRO OBLICUO
+   ---------------------------------------------------------------------
+   Origen en el pie del lanzador. Eje x horizontal, eje y vertical (hacia arriba).
+     x(t) = vx · t
+     y(t) = h0 + vy0 · t − ½ · g · t²
+   ===================================================================== */
+function calcularTiro(v0, anguloGrados, h0, g) {
+  const th = anguloGrados * Math.PI / 180;           // grados → radianes
+  const vx = v0 * Math.cos(th);                      // componente horizontal (constante)
+  const vy0 = v0 * Math.sin(th);                     // componente vertical inicial
+  const tSub = Math.max(vy0 / g, 0);                 // tiempo de subida (vy = 0)
+  const H = h0 + (vy0 > 0 ? (vy0 * vy0) / (2 * g) : 0); // altura máxima
+  // Tiempo de vuelo: raíz positiva de  h0 + vy0·t − ½·g·t² = 0
+  const tv = (vy0 + Math.sqrt(vy0 * vy0 + 2 * g * h0)) / g;
+  const R = vx * tv;                                 // alcance
+  const vyFinal = vy0 - g * tv;
+  const vImpacto = Math.hypot(vx, vyFinal);          // rapidez al tocar el suelo
+  return { v0, angulo: anguloGrados, h0, g, th, vx, vy0, tSub, H, tv, R, vImpacto };
+}
+
+// Posición y velocidad en el instante t
+function posicion(tiro, t) {
+  return {
+    x: tiro.vx * t,
+    y: tiro.h0 + tiro.vy0 * t - 0.5 * tiro.g * t * t,
+    vx: tiro.vx,
+    vy: tiro.vy0 - tiro.g * t
+  };
+}
+
+// Puntos [x, y] de la trayectoria (fraccion = 1 → completa)
+function muestrear(tiro, n = 80, fraccion = 1) {
+  const pts = [];
+  const tFin = tiro.tv * fraccion;
+  for (let i = 0; i <= n; i++) {
+    const t = (tFin * i) / n;
+    pts.push([tiro.vx * t, tiro.h0 + tiro.vy0 * t - 0.5 * tiro.g * t * t]);
+  }
+  return pts;
+}
+
+const tiroActual = () => calcularTiro(estado.v0, estado.angulo, estado.h0, planeta().g);
+
+/* =====================================================================
+   5. SONIDO (sintetizado con Web Audio: no necesita archivos)
+   ===================================================================== */
+const Sonido = {
+  ctx: null,
+  activo: almacen.leer('parabola-sonido', true),
+  iniciar() {
+    if (!this.ctx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      this.ctx = new AC();
+    }
+    if (this.ctx.state === 'suspended') this.ctx.resume();
+    return this.ctx;
+  },
+  // Tono con barrido de frecuencia f1 → f2
+  tono(f1, f2, dur, tipo = 'sine', vol = 0.15, retardo = 0) {
+    if (!this.activo) return;
+    const c = this.iniciar(); if (!c) return;
+    const t = c.currentTime + retardo;
+    const osc = c.createOscillator(), gan = c.createGain();
+    osc.type = tipo;
+    osc.frequency.setValueAtTime(f1, t);
+    osc.frequency.exponentialRampToValueAtTime(f2, t + dur);
+    gan.gain.setValueAtTime(0.0001, t);
+    gan.gain.exponentialRampToValueAtTime(vol, t + 0.012);
+    gan.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gan).connect(c.destination);
+    osc.start(t); osc.stop(t + dur + 0.03);
+  },
+  // Ruido filtrado (para "whoosh" y golpes)
+  ruido(dur, vol, frecuencia) {
+    if (!this.activo) return;
+    const c = this.iniciar(); if (!c) return;
+    const n = Math.floor(c.sampleRate * dur);
+    const buf = c.createBuffer(1, n, c.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n);
+    const src = c.createBufferSource(); src.buffer = buf;
+    const filtro = c.createBiquadFilter(); filtro.type = 'bandpass'; filtro.frequency.value = frecuencia; filtro.Q.value = 0.8;
+    const gan = c.createGain(); gan.gain.value = vol;
+    src.connect(filtro).connect(gan).connect(c.destination);
+    src.start();
+  },
+  lanzar()    { this.ruido(0.35, 0.22, 900); this.tono(160, 640, 0.3, 'sawtooth', 0.04); },
+  aterrizar() { this.tono(220, 90, 0.18, 'sine', 0.12); },
+  acierto()   { [523, 659, 784, 1047].forEach((f, i) => this.tono(f, f * 1.01, 0.28, 'triangle', 0.12, i * 0.07)); this.ruido(0.5, 0.12, 2500); },
+  fallo()     { this.tono(180, 70, 0.32, 'sine', 0.18); this.ruido(0.18, 0.08, 300); },
+  clic()      { this.tono(1300, 900, 0.045, 'square', 0.02); }
+};
+
+/* =====================================================================
+   6. FONDO DE ESTRELLAS ANIMADO (titileo + paralaje + estrellas fugaces)
+   ===================================================================== */
+const Fondo = (() => {
+  const lienzo = $('#fondo');
+  const c = lienzo.getContext('2d');
+  let ancho = 0, alto = 0, estrellas = [], fugaces = [];
+  let ratonX = 0, ratonY = 0, px = 0, py = 0, proximaFugaz = 2.5;
+  const tintes = ['#FFFFFF', '#FFFFFF', '#FFFFFF', '#BFF7FF', '#D9C2FF'];
+
+  function redimensionar() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    ancho = window.innerWidth; alto = window.innerHeight;
+    lienzo.width = Math.round(ancho * dpr); lienzo.height = Math.round(alto * dpr);
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    // La cantidad de estrellas depende del tamaño de la pantalla (máx. 280)
+    const n = Math.min(280, Math.round((ancho * alto) / 5200));
+    estrellas = Array.from({ length: n }, () => ({
+      x: Math.random() * ancho, y: Math.random() * alto,
+      z: Math.random(),                       // profundidad: 0 lejos, 1 cerca
+      fase: Math.random() * TAU, vel: azar(0.6, 2.2),
+      color: tintes[(Math.random() * tintes.length) | 0]
+    }));
+  }
+
+  function raton(x, y) { ratonX = x / ancho - 0.5; ratonY = y / alto - 0.5; }
+
+  function cuadro(t, dt) {
+    c.clearRect(0, 0, ancho, alto);
+    px += (ratonX - px) * Math.min(1, dt * 2);
+    py += (ratonY - py) * Math.min(1, dt * 2);
+    for (const e of estrellas) {
+      if (!reducirMov) {
+        e.x -= dt * (2 + e.z * 8);            // deriva lenta hacia la izquierda
+        if (e.x < -6) { e.x = ancho + 6; e.y = Math.random() * alto; }
+      }
+      const x = e.x - px * 30 * (0.2 + e.z), y = e.y - py * 30 * (0.2 + e.z); // paralaje
+      const brillo = 0.35 + 0.65 * (0.5 + 0.5 * Math.sin(t * e.vel + e.fase));
+      const tam = 0.6 + e.z * 1.6;
+      c.globalAlpha = brillo * (0.35 + 0.65 * e.z);
+      c.fillStyle = e.color;
+      if (tam > 1.75) {                         // estrellas grandes: punto + destello en cruz
+        c.beginPath(); c.arc(x, y, tam * 0.7, 0, TAU); c.fill();
+        c.globalAlpha *= 0.35;
+        c.fillRect(x - tam * 2.6, y - 0.5, tam * 5.2, 1);
+        c.fillRect(x - 0.5, y - tam * 2.6, 1, tam * 5.2);
+      } else {
+        c.fillRect(x, y, tam, tam);
+      }
+    }
+    c.globalAlpha = 1;
+
+    // Estrellas fugaces ocasionales
+    proximaFugaz -= dt;
+    if (proximaFugaz <= 0 && !reducirMov) {
+      proximaFugaz = azar(3, 8);
+      fugaces.push({ x: azar(ancho * 0.3, ancho * 1.05), y: azar(-20, alto * 0.4), vx: -azar(420, 640), vy: azar(150, 260), vida: 1 });
+    }
+    for (const f of fugaces) {
+      f.x += f.vx * dt; f.y += f.vy * dt; f.vida -= dt * 1.15;
+      const cola = 0.13;
+      const gr = c.createLinearGradient(f.x, f.y, f.x - f.vx * cola, f.y - f.vy * cola);
+      gr.addColorStop(0, `rgba(234,242,255,${Math.max(0, f.vida)})`);
+      gr.addColorStop(1, 'rgba(0,229,255,0)');
+      c.strokeStyle = gr; c.lineWidth = 1.6;
+      c.beginPath(); c.moveTo(f.x, f.y); c.lineTo(f.x - f.vx * cola, f.y - f.vy * cola); c.stroke();
+    }
+    fugaces = fugaces.filter(f => f.vida > 0);
+  }
+
+  return { redimensionar, raton, cuadro };
+})();
+
+/* =====================================================================
+   7. ESCENA PRINCIPAL (CANVAS)
+   ===================================================================== */
+const marco = $('#lienzoMarco');
+const lienzo = $('#juego');
+const ctx = lienzo.getContext('2d');
+const hudEl = $('#hud');
+
+let ANCHO = 0, ALTO = 0, DPR = 1;   // tamaño del canvas en píxeles CSS
+let OX = 0, OY = 0;                 // posición en pantalla del origen (0, 0)
+const PAD = { izq: 50, der: 18, arr: 60, abj: 34 }; // márgenes del área de dibujo
+let reloj = 0;                      // segundos desde que empezó el juego
+
+// Cámara: "s" = cuántos píxeles mide un metro. Se ajusta sola con una transición suave.
+const cam = { s: 8, objetivo: 8, lista: false, reajustar: true };
+
+// Conversión mundo (metros) → pantalla (píxeles)
+const sx = x => OX + x * cam.s;
+const sy = y => OY - y * cam.s;
+
+// Efectos visuales
+let particulas = [], ondas = [], textos = [];
+let sacudida = 0, destello = 0;
+let planetaDeco = null, planetaT0 = 0;
+
+/* --- Sprites de brillo pre-renderizados (dibujar imágenes es más rápido que usar sombras) --- */
+function crearBrillo(color, radio = 32) {
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = radio * 2;
+  const x = cv.getContext('2d');
+  const g = x.createRadialGradient(radio, radio, 0, radio, radio, radio);
+  g.addColorStop(0, 'rgba(255,255,255,1)');
+  g.addColorStop(0.2, hexA(color, 0.95));
+  g.addColorStop(0.5, hexA(color, 0.3));
+  g.addColorStop(1, hexA(color, 0));
+  x.fillStyle = g; x.fillRect(0, 0, radio * 2, radio * 2);
+  return cv;
+}
+const SPR = {
+  cian: crearBrillo(C.cian), violeta: crearBrillo(C.violeta), magenta: crearBrillo(C.magenta),
+  verde: crearBrillo(C.verde), ambar: crearBrillo(C.ambar), blanco: crearBrillo('#FFFFFF'),
+  bola: crearBrillo(C.cian, 48), polvo: crearBrillo('#B8C2FF')
+};
+
+/* --- Tamaño del canvas: se adapta al contenedor y a pantallas de alta densidad --- */
+function redimensionarEscena() {
+  const r = marco.getBoundingClientRect();
+  ANCHO = Math.max(1, Math.round(r.width));
+  ALTO = Math.max(1, Math.round(r.height));
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  lienzo.width = Math.round(ANCHO * DPR);
+  lienzo.height = Math.round(ALTO * DPR);
+  PAD.izq = ANCHO < 520 ? 42 : 52;
+  PAD.arr = hudEl.offsetHeight + 24;      // deja libre la franja del HUD
+  OX = PAD.izq + 22;
+  OY = ALTO - PAD.abj;
+  crearPlanetaDecorativo();
+  cam.reajustar = true;
+}
+
+/* --- Cámara automática --------------------------------------------------
+   Calcula qué parte del mundo hay que mostrar y ajusta la escala con
+   "histéresis": solo hace zoom si algo no cabe o si todo quedó muy pequeño.
+   Así la vista no "tiembla" cada vez que mueves un slider.               */
+function contenidoMundo() {
+  let xMax = 10, yMax = Math.max(5, estado.h0);
+  const incluir = t => { xMax = Math.max(xMax, t.R); yMax = Math.max(yMax, t.H); };
+
+  if (estado.modo === 'libre') {
+    incluir(tiroActual());
+  } else {
+    const o = estado.desafio.objetivo;
+    if (o) xMax = Math.max(xMax, (o.x + o.w / 2) * 1.12);
+    // En niveles difíciles NO usamos la predicción (el zoom delataría el alcance)
+    if (modoVistaPrevia() === 'completa') incluir(tiroActual());
+    estado.fantasmas.forEach(f => { xMax = Math.max(xMax, f.R); yMax = Math.max(yMax, f.H); });
+  }
+  if (estado.vuelo) incluir(estado.vuelo.tiro);
+  return { xMax: xMax * 1.1, yMax: yMax * 1.15 };
+}
+
+function actualizarCamara(dt) {
+  const ancho = Math.max(40, ANCHO - OX - PAD.der);
+  const alto = Math.max(40, OY - PAD.arr);
+  const c = contenidoMundo();
+  const sNecesaria = Math.min(ancho / c.xMax, alto / c.yMax);
+  if (!cam.lista) { cam.s = cam.objetivo = sNecesaria; cam.lista = true; }
+  if (cam.reajustar || cam.objetivo > sNecesaria * 1.001 || cam.objetivo < sNecesaria * 0.5) {
+    cam.objetivo = sNecesaria;
+    cam.reajustar = false;
+  }
+  // Interpolación en escala logarítmica: el zoom se siente uniforme
+  const k = 1 - Math.exp(-dt * 4.5);
+  cam.s = Math.exp(lerp(Math.log(cam.s), Math.log(cam.objetivo), k));
+}
+
+/* --- Ayudas de dibujo --- */
+function rectRedondo(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+function trazar(pts) {
+  ctx.beginPath();
+  for (let i = 0; i < pts.length; i++) {
+    const X = sx(pts[i][0]), Y = sy(pts[i][1]);
+    if (i === 0) ctx.moveTo(X, Y); else ctx.lineTo(X, Y);
+  }
+}
+
+// Etiqueta tipo "píldora" con fondo oscuro (se mantiene dentro del canvas)
+function etiqueta(texto, x, y, color, alinear = 'center') {
+  ctx.font = `600 11px ${F_NUM}`;
+  const w = ctx.measureText(texto).width + 14, h = 21;
+  let x0 = alinear === 'center' ? x - w / 2 : alinear === 'right' ? x - w : x;
+  x0 = clamp(x0, 4, ANCHO - w - 4);
+  const y0 = clamp(y - h / 2, 4, ALTO - h - 4);
+  ctx.fillStyle = 'rgba(6,8,30,.86)';
+  rectRedondo(x0, y0, w, h, 7); ctx.fill();
+  ctx.strokeStyle = hexA(color, 0.6); ctx.lineWidth = 1; ctx.stroke();
+  ctx.fillStyle = color; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.fillText(texto, x0 + 7, y0 + h / 2 + 0.5);
+}
+
+// Texto con subíndice: textoSub('v', 'x', ...) → vₓ
+function textoSub(base, sub, x, y, color, tam = 12) {
+  ctx.fillStyle = color; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.font = `700 ${tam}px ${F_NUM}`;
+  ctx.fillText(base, x, y);
+  const w = ctx.measureText(base).width;
+  ctx.font = `700 ${tam * 0.72}px ${F_NUM}`;
+  ctx.fillText(sub, x + w + 0.5, y + tam * 0.32);
+}
+
+function flecha(x1, y1, x2, y2, color, grosor = 2) {
+  const dx = x2 - x1, dy = y2 - y1, L = Math.hypot(dx, dy);
+  if (L < 3) return;
+  const ux = dx / L, uy = dy / L, cab = Math.min(9, L * 0.45);
+  ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = grosor; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2 - ux * cab * 0.7, y2 - uy * cab * 0.7); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(x2, y2);
+  ctx.lineTo(x2 - ux * cab - uy * cab * 0.55, y2 - uy * cab + ux * cab * 0.55);
+  ctx.lineTo(x2 - ux * cab + uy * cab * 0.55, y2 - uy * cab - ux * cab * 0.55);
+  ctx.closePath(); ctx.fill();
+}
+
+// Elige un paso "bonito" para la cuadrícula: 1, 2, 5, 10, 20, 50...
+function pasoBonito(bruto) {
+  const p = Math.pow(10, Math.floor(Math.log10(bruto)));
+  const n = bruto / p;
+  return (n < 1.5 ? 1 : n < 3.5 ? 2 : n < 7.5 ? 5 : 10) * p;
+}
+
+/* --- Planeta decorativo (se dibuja una sola vez en un canvas aparte) --- */
+function crearPlanetaDecorativo() {
+  const p = planeta();
+  const tam = Math.round(clamp(Math.min(ANCHO, ALTO) * 0.6, 140, 440));
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = Math.round(tam * DPR);
+  const x = cv.getContext('2d');
+  x.scale(DPR, DPR);
+  const cx = tam / 2, cy = tam / 2, r = tam * 0.34;
+  const rnd = semilla(p.semilla);
+
+  // Halo atmosférico
+  let g = x.createRadialGradient(cx, cy, r * 0.85, cx, cy, r * 1.45);
+  g.addColorStop(0, hexA(p.esfera[1], 0.45)); g.addColorStop(1, hexA(p.esfera[1], 0));
+  x.fillStyle = g; x.beginPath(); x.arc(cx, cy, r * 1.45, 0, TAU); x.fill();
+
+  // Cuerpo del planeta
+  g = x.createRadialGradient(cx - r * 0.35, cy - r * 0.4, r * 0.05, cx, cy, r);
+  g.addColorStop(0, p.esfera[0]); g.addColorStop(0.55, p.esfera[1]); g.addColorStop(1, p.esfera[2]);
+  x.save();
+  x.beginPath(); x.arc(cx, cy, r, 0, TAU); x.fillStyle = g; x.fill(); x.clip();
+
+  // Detalles de superficie según el planeta
+  const elipse = (ex, ey, rx, ry, rot, color) => { x.fillStyle = color; x.beginPath(); x.ellipse(ex, ey, rx, ry, rot, 0, TAU); x.fill(); };
+  if (estado.planeta === 'tierra') {
+    for (let i = 0; i < 7; i++) elipse(cx + (rnd() - 0.5) * r * 1.6, cy + (rnd() - 0.5) * r * 1.6, r * azarS(rnd, 0.12, 0.3), r * azarS(rnd, 0.08, 0.2), rnd() * 3, 'rgba(70,210,150,.5)');
+    for (let i = 0; i < 6; i++) elipse(cx + (rnd() - 0.5) * r * 1.8, cy + (rnd() - 0.5) * r * 1.8, r * azarS(rnd, 0.2, 0.45), r * 0.04, rnd() * 0.4, 'rgba(255,255,255,.35)');
+  } else if (estado.planeta === 'luna') {
+    for (let i = 0; i < 16; i++) {
+      const ex = cx + (rnd() - 0.5) * r * 1.8, ey = cy + (rnd() - 0.5) * r * 1.8, er = r * azarS(rnd, 0.04, 0.16);
+      elipse(ex, ey, er, er, 0, 'rgba(50,54,80,.35)');
+      x.strokeStyle = 'rgba(255,255,255,.18)'; x.lineWidth = 1; x.beginPath(); x.arc(ex, ey, er, Math.PI * 1.1, Math.PI * 1.9); x.stroke();
+    }
+  } else if (estado.planeta === 'marte') {
+    for (let i = 0; i < 7; i++) elipse(cx + (rnd() - 0.5) * r * 1.6, cy + (rnd() - 0.5) * r * 1.6, r * azarS(rnd, 0.1, 0.3), r * azarS(rnd, 0.05, 0.14), rnd() * 3, 'rgba(90,20,10,.35)');
+    elipse(cx, cy - r * 0.92, r * 0.35, r * 0.12, 0, 'rgba(255,255,255,.75)');
+  } else {
+    for (let i = 0; i < 11; i++) {
+      x.fillStyle = i % 2 ? 'rgba(120,70,35,.45)' : 'rgba(255,230,190,.22)';
+      x.fillRect(cx - r, cy - r + i * (2 * r / 11), 2 * r, r * azarS(rnd, 0.08, 0.16));
+    }
+    elipse(cx + r * 0.25, cy + r * 0.3, r * 0.2, r * 0.11, 0, 'rgba(200,80,50,.65)');
+  }
+
+  // Sombra del lado nocturno
+  g = x.createRadialGradient(cx - r * 0.6, cy - r * 0.6, r * 0.4, cx - r * 0.3, cy - r * 0.3, r * 1.9);
+  g.addColorStop(0, 'rgba(5,6,26,0)'); g.addColorStop(0.55, 'rgba(5,6,26,.15)'); g.addColorStop(1, 'rgba(5,6,26,.92)');
+  x.fillStyle = g; x.fillRect(0, 0, tam, tam);
+  x.restore();
+
+  // Borde iluminado
+  x.strokeStyle = hexA(p.esfera[0], 0.55); x.lineWidth = 1.5;
+  x.beginPath(); x.arc(cx, cy, r, Math.PI * 0.95, Math.PI * 1.75); x.stroke();
+  planetaDeco = { cv, tam };
+}
+function azarS(rnd, a, b) { return a + rnd() * (b - a); }
+
+function dibujarPlanetaDeco() {
+  if (!planetaDeco) return;
+  const k = clamp((reloj - planetaT0) / 1.1, 0, 1);
+  const e = 1 - Math.pow(1 - k, 3);
+  const t = planetaDeco.tam;
+  ctx.globalAlpha = 0.5 * e;
+  ctx.drawImage(planetaDeco.cv, ANCHO - t * 0.72, -t * 0.18 + (1 - e) * 30 + Math.sin(reloj * 0.3) * 4, t, t);
+  ctx.globalAlpha = 1;
+}
+
+/* --- Suelo y cuadrícula --- */
+function dibujarSuelo() {
+  const p = planeta();
+  let g = ctx.createLinearGradient(0, OY, 0, ALTO);
+  g.addColorStop(0, p.suelo[0]); g.addColorStop(1, p.suelo[1]);
+  ctx.fillStyle = g; ctx.fillRect(0, OY, ANCHO, ALTO - OY);
+  // Resplandor en el horizonte
+  g = ctx.createLinearGradient(0, OY - 30, 0, OY);
+  g.addColorStop(0, hexA(p.linea, 0)); g.addColorStop(1, hexA(p.linea, 0.1));
+  ctx.fillStyle = g; ctx.fillRect(0, OY - 30, ANCHO, 30);
+  // Línea del suelo con brillo (eje x)
+  ctx.lineCap = 'butt';
+  ctx.strokeStyle = hexA(p.linea, 0.22); ctx.lineWidth = 6;
+  ctx.beginPath(); ctx.moveTo(0, OY); ctx.lineTo(ANCHO, OY); ctx.stroke();
+  ctx.strokeStyle = p.linea; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(0, OY + 0.5); ctx.lineTo(ANCHO, OY + 0.5); ctx.stroke();
+}
+
+function dibujarCuadricula() {
+  const s = cam.s;
+  const paso = pasoBonito(80 / s);
+  const sub = paso / 5;
+  const xMin = -OX / s, xMax = (ANCHO - OX) / s, yMax = OY / s;
+  ctx.lineWidth = 1;
+
+  // Líneas menores
+  if (sub * s >= 9) {
+    ctx.beginPath();
+    for (let i = Math.ceil(xMin / sub); i * sub <= xMax; i++) {
+      if (i % 5 === 0) continue;
+      const X = Math.round(sx(i * sub)) + 0.5; ctx.moveTo(X, 0); ctx.lineTo(X, OY);
+    }
+    for (let j = 1; j * sub <= yMax; j++) {
+      if (j % 5 === 0) continue;
+      const Y = Math.round(sy(j * sub)) + 0.5; ctx.moveTo(0, Y); ctx.lineTo(ANCHO, Y);
+    }
+    ctx.strokeStyle = 'rgba(110,130,255,.055)'; ctx.stroke();
+  }
+  // Líneas mayores
+  ctx.beginPath();
+  for (let i = Math.ceil(xMin / paso); i * paso <= xMax; i++) {
+    if (i === 0) continue;
+    const X = Math.round(sx(i * paso)) + 0.5; ctx.moveTo(X, 0); ctx.lineTo(X, OY);
+  }
+  for (let j = 1; j * paso <= yMax; j++) {
+    const Y = Math.round(sy(j * paso)) + 0.5; ctx.moveTo(0, Y); ctx.lineTo(ANCHO, Y);
+  }
+  ctx.strokeStyle = 'rgba(110,140,255,.13)'; ctx.stroke();
+
+  // Números de los ejes
+  const dec = paso >= 1 ? 0 : paso >= 0.1 ? 1 : 2;
+  ctx.font = `500 10.5px ${F_NUM}`;
+  ctx.fillStyle = 'rgba(142,154,214,.85)';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  for (let i = Math.max(0, Math.ceil(xMin / paso)); i * paso <= xMax; i++) {
+    const X = sx(i * paso);
+    if (X > ANCHO - 16) continue;
+    ctx.fillText(fmt(i * paso, dec), X, OY + 9);
+  }
+  ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  for (let j = 1; j * paso <= yMax; j++) {
+    const Y = sy(j * paso);
+    if (Y < 12) continue;
+    ctx.fillText(fmt(j * paso, dec), OX - 26, Y);
+  }
+
+  // Eje y con flecha
+  ctx.strokeStyle = 'rgba(0,229,255,.5)'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(OX + 0.5, OY); ctx.lineTo(OX + 0.5, 10); ctx.stroke();
+  ctx.fillStyle = 'rgba(0,229,255,.8)';
+  ctx.beginPath(); ctx.moveTo(OX + 0.5, 3); ctx.lineTo(OX - 4, 12); ctx.lineTo(OX + 5, 12); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(ANCHO - 2, OY + 0.5); ctx.lineTo(ANCHO - 11, OY - 4); ctx.lineTo(ANCHO - 11, OY + 5); ctx.closePath(); ctx.fill();
+  ctx.font = `600 11px ${F_NUM}`; ctx.fillStyle = C.cian;
+  ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText('y (m)', OX + 9, PAD.arr - 8);
+  ctx.textAlign = 'right'; ctx.fillText('x (m)', ANCHO - 14, OY - 12);
+}
+
+/* --- Objetivo del modo desafío --- */
+function dibujarObjetivo() {
+  if (estado.modo !== 'desafio') return;
+  const o = estado.desafio.objetivo;
+  if (!o) return;
+  const k = clamp((reloj - o.t0) / 0.8, 0, 1);
+  const e = 1 - Math.pow(1 - k, 3);
+  const color = o.acertado ? C.verde : C.magenta;
+  const x1 = sx(o.x - o.w / 2), x2 = sx(o.x + o.w / 2), xc = sx(o.x);
+  const anchoPx = Math.max(x2 - x1, 3);
+
+  // Haz de luz vertical
+  const altoHaz = (70 + Math.sin(reloj * 3) * 6 + (o.acertado ? 60 : 0)) * e;
+  const g = ctx.createLinearGradient(0, OY - altoHaz, 0, OY);
+  g.addColorStop(0, hexA(color, 0)); g.addColorStop(1, hexA(color, 0.38));
+  ctx.fillStyle = g;
+  ctx.fillRect(xc - anchoPx / 2, OY - altoHaz, anchoPx, altoHaz);
+
+  // Anillos que pulsan sobre el suelo
+  ctx.lineWidth = 1.5;
+  for (let i = 0; i < 3; i++) {
+    const f = (reloj * 0.7 + i / 3) % 1;
+    const r = Math.max(anchoPx * 0.55, 14) * (0.35 + f * 0.9);
+    ctx.strokeStyle = hexA(color, (1 - f) * 0.6 * e);
+    ctx.beginPath(); ctx.ellipse(xc, OY, r, r * 0.3, 0, 0, TAU); ctx.stroke();
+  }
+
+  // Plataforma (ancho real del objetivo)
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.fillStyle = hexA(color, 0.35); ctx.fillRect(x1 - 2, OY - 5, anchoPx + 4, 10);
+  ctx.fillStyle = color; ctx.fillRect(x1, OY - 2, anchoPx, 4);
+  ctx.globalCompositeOperation = 'source-over';
+  // Bordes y centro
+  ctx.strokeStyle = color; ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(x1, OY - 9); ctx.lineTo(x1, OY + 4);
+  ctx.moveTo(x1 + anchoPx, OY - 9); ctx.lineTo(x1 + anchoPx, OY + 4);
+  ctx.moveTo(xc, OY - 14); ctx.lineTo(xc, OY - 5);
+  ctx.stroke();
+
+  if (k > 0.4) etiqueta(o.acertado ? '¡ACIERTO!' : `OBJETIVO · x = ${fmt(o.x, 1)} m`, xc, OY - altoHaz - 14, color);
+}
+
+/* --- Trayectorias anteriores ("fantasmas") --- */
+function dibujarFantasmas() {
+  const v = estado.vuelo;
+  ctx.lineWidth = 1.5; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  estado.fantasmas.forEach((f, i) => {
+    // El último ya lo dibuja el vuelo actual si acaba de aterrizar
+    if (v && v.fase === 'aterrizado' && i === estado.fantasmas.length - 1) return;
+    ctx.strokeStyle = hexA(f.color, 0.35);
+    trazar(f.pts); ctx.stroke();
+    const X = sx(f.R);
+    ctx.strokeStyle = hexA(f.color, 0.7);
+    ctx.beginPath(); ctx.moveTo(X - 4, OY - 4); ctx.lineTo(X + 4, OY + 4); ctx.moveTo(X + 4, OY - 4); ctx.lineTo(X - 4, OY + 4); ctx.stroke();
+  });
+}
+
+/* --- Vista previa punteada --- */
+function dibujarPrevia() {
+  const modo = modoVistaPrevia();
+  if (modo === 'ninguna') return;
+  if (estado.vuelo && estado.vuelo.fase === 'volando') return;
+  if (estado.desafio.esperando && estado.modo === 'desafio') return;
+  const t = tiroActual();
+  if (t.tv < 0.02) return;
+  const v = estado.vuelo;
+  if (v && v.tiro.v0 === t.v0 && v.tiro.angulo === t.angulo && v.tiro.h0 === t.h0 && v.tiro.g === t.g) return;
+  const frac = modo === 'parcial' ? 0.38 : 1;
+  const pts = muestrear(t, 90, frac);
+
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.strokeStyle = 'rgba(234,242,255,.08)'; ctx.lineWidth = 7;
+  trazar(pts); ctx.stroke();
+  ctx.setLineDash([7, 9]);
+  ctx.lineDashOffset = -reloj * 30;               // efecto "hormigas en marcha"
+  ctx.strokeStyle = 'rgba(234,242,255,.85)'; ctx.lineWidth = 2;
+  trazar(pts); ctx.stroke();
+  ctx.setLineDash([]);
+
+  if (modo === 'parcial') {
+    const [ux, uy] = pts[pts.length - 1];
+    etiqueta('?', sx(ux) + 14, sy(uy) - 10, C.ambar);
+    return;
+  }
+  // Marcadores: altura máxima y punto de aterrizaje
+  if (t.vy0 > 0.05) {
+    const ax = sx(t.vx * t.tSub), ay = sy(t.H);
+    ctx.fillStyle = C.violeta;
+    ctx.beginPath(); ctx.moveTo(ax, ay - 5); ctx.lineTo(ax + 5, ay); ctx.lineTo(ax, ay + 5); ctx.lineTo(ax - 5, ay); ctx.closePath(); ctx.fill();
+    etiqueta(`H = ${fmt(t.H)} m`, ax, ay - 18, C.violeta);
+  }
+  const lx = sx(t.R);
+  ctx.strokeStyle = C.cian; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.arc(lx, OY, 6 + Math.sin(reloj * 5) * 1.5, 0, TAU); ctx.stroke();
+  etiqueta(`R = ${fmt(t.R)} m`, lx, OY - 22, C.cian);
+}
+
+/* --- Vuelo en curso: recorrido, estela y marcadores --- */
+function dibujarVuelo() {
+  const v = estado.vuelo;
+  if (!v) return;
+  const tiro = v.tiro;
+  const pts = muestrear(tiro, 80, v.t / tiro.tv);
+
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.strokeStyle = 'rgba(0,229,255,.16)'; ctx.lineWidth = 7; trazar(pts); ctx.stroke();
+  ctx.strokeStyle = 'rgba(0,229,255,.85)'; ctx.lineWidth = 2; trazar(pts); ctx.stroke();
+
+  // Estela: segmentos que se engrosan y cambian de violeta a cian
+  const e = v.estela;
+  for (let i = 1; i < e.length; i++) {
+    const k = i / e.length;
+    ctx.strokeStyle = `rgba(${Math.round(lerp(162, 120, k))},${Math.round(lerp(89, 240, k))},255,${k * 0.85})`;
+    ctx.lineWidth = 1 + k * 7;
+    ctx.beginPath(); ctx.moveTo(sx(e[i - 1][0]), sy(e[i - 1][1])); ctx.lineTo(sx(e[i][0]), sy(e[i][1])); ctx.stroke();
+  }
+  ctx.globalCompositeOperation = 'source-over';
+
+  // Marcador de altura máxima (cuando ya pasó por ahí)
+  if (tiro.vy0 > 0.05 && v.t >= tiro.tSub) {
+    const ax = sx(tiro.vx * tiro.tSub), ay = sy(tiro.H);
+    ctx.setLineDash([3, 4]); ctx.strokeStyle = hexA(C.violeta, 0.6); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(ax, OY); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = C.violeta; ctx.beginPath(); ctx.arc(ax, ay, 4, 0, TAU); ctx.fill();
+    etiqueta(`H = ${fmt(tiro.H)} m`, ax, ay - 18, C.violeta);
+  }
+  // Marcador de aterrizaje
+  if (v.fase === 'aterrizado') {
+    const lx = sx(tiro.R);
+    ctx.strokeStyle = C.cian; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(lx, OY - 10); ctx.lineTo(lx, OY + 6); ctx.stroke();
+    let txt = `R = ${fmt(tiro.R)} m`, color = C.cian;
+    if (v.resultado === 'corto' || v.resultado === 'largo') {
+      txt += `  (${v.delta > 0 ? '+' : '−'}${fmt(Math.abs(v.delta), 1)} m)`;
+      color = C.magenta;
+    } else if (v.resultado === 'acierto') color = C.verde;
+    etiqueta(txt, lx, OY - 40, color);
+  }
+}
+
+/* --- Lanzador: torre (altura h0), cañón, arco del ángulo --- */
+function dibujarCanon() {
+  const v = estado.vuelo;
+  // Mientras vuela, el cañón muestra los valores con que se lanzó
+  const p = v && v.fase === 'volando' ? v.tiro : { angulo: estado.angulo, h0: estado.h0 };
+  const th = p.angulo * Math.PI / 180;
+  const Y = sy(p.h0);
+  const retroceso = v ? v.retroceso * 7 : 0;
+
+  // Torre
+  if (OY - Y > 2) {
+    const g = ctx.createLinearGradient(OX - 9, 0, OX + 9, 0);
+    g.addColorStop(0, '#1B1550'); g.addColorStop(0.5, '#2A2170'); g.addColorStop(1, '#14103E');
+    ctx.fillStyle = g; ctx.fillRect(OX - 9, Y, 18, OY - Y);
+    ctx.strokeStyle = hexA(C.violeta, 0.7); ctx.lineWidth = 1;
+    ctx.strokeRect(OX - 8.5, Y + 0.5, 17, OY - Y - 1);
+    ctx.strokeStyle = hexA(C.violeta, 0.25);
+    ctx.beginPath();
+    for (let yy = Y + 10; yy < OY - 2; yy += 10) { ctx.moveTo(OX - 8, yy); ctx.lineTo(OX + 8, yy); }
+    ctx.stroke();
+    ctx.fillStyle = C.violeta; ctx.fillRect(OX - 15, Y - 2, 30, 3);
+    // Cota de altura h0
+    ctx.strokeStyle = hexA(C.ambar, 0.7); ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(OX - 17, Y); ctx.lineTo(OX - 17, OY);
+    ctx.moveTo(OX - 21, Y); ctx.lineTo(OX - 13, Y);
+    ctx.moveTo(OX - 21, OY); ctx.lineTo(OX - 13, OY);
+    ctx.stroke();
+    if (OY - Y > 34) {
+      ctx.save(); ctx.translate(OX - 22, (Y + OY) / 2); ctx.rotate(-Math.PI / 2);
+      ctx.font = `600 10px ${F_NUM}`; ctx.fillStyle = C.ambar; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+      ctx.fillText(`h₀ = ${fmt(p.h0, 1)} m`, 0, 0);
+      ctx.restore();
+    }
+  }
+
+  // Arco del ángulo θ
+  ctx.setLineDash([3, 4]); ctx.strokeStyle = 'rgba(255,194,75,.45)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(OX, Y); ctx.lineTo(OX + 64, Y); ctx.stroke(); ctx.setLineDash([]);
+  ctx.strokeStyle = C.ambar; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.arc(OX, Y, 44, 0, -th, true); ctx.stroke();
+  ctx.font = `700 11px ${F_NUM}`; ctx.fillStyle = C.ambar; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.fillText(`θ = ${fmt(p.angulo, 1)}°`, OX + Math.cos(th / 2) * 52 + 4, Y - Math.sin(th / 2) * 52 - 2);
+
+  // Cañón
+  ctx.save();
+  ctx.translate(OX, Y);
+  ctx.rotate(-th);
+  const g2 = ctx.createLinearGradient(0, -6, 0, 6);
+  g2.addColorStop(0, '#3A4BB0'); g2.addColorStop(0.5, '#1B2470'); g2.addColorStop(1, '#0E1340');
+  ctx.fillStyle = g2;
+  rectRedondo(-4 - retroceso, -5.5, 36, 11, 4); ctx.fill();
+  ctx.strokeStyle = C.cian; ctx.lineWidth = 1.2; ctx.stroke();
+  ctx.fillStyle = C.cian; ctx.fillRect(28 - retroceso, -6.5, 4, 13);
+  ctx.globalCompositeOperation = 'lighter';
+  const pulso = 0.6 + 0.4 * Math.sin(reloj * 4);
+  ctx.globalAlpha = 0.5 * pulso;
+  ctx.drawImage(SPR.cian, 30 - retroceso - 12, -12, 24, 24);
+  ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+  ctx.restore();
+
+  // Base (domo)
+  ctx.fillStyle = '#151A45';
+  ctx.beginPath(); ctx.arc(OX, Y, 13, Math.PI, TAU); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = C.cian; ctx.lineWidth = 1.5; ctx.stroke();
+  ctx.fillStyle = C.texto; ctx.beginPath(); ctx.arc(OX, Y, 2.5, 0, TAU); ctx.fill();
+}
+
+/* --- Vectores de velocidad --- */
+function dibujarVectores() {
+  if (!estado.vectores) return;
+  const v = estado.vuelo;
+  const escala = clamp(((OY - PAD.arr) * 0.42) / V0_MAX, 0.9, 2.4); // píxeles por (m/s)
+  ctx.font = `700 12px ${F_NUM}`;
+
+  if (v && v.fase === 'volando') {
+    // Vectores sobre la pelota: vx constante, vy cambia, v resultante
+    const p = posicion(v.tiro, v.t);
+    const X = sx(p.x), Y = sy(p.y);
+    const xV = X + p.vx * escala, yV = Y - p.vy * escala;
+    flecha(X, Y, xV, Y, C.cian, 2);
+    flecha(X, Y, X, yV, C.violeta, 2);
+    flecha(X, Y, xV, yV, C.texto, 2.2);
+    textoSub('v', 'x', xV + 4, Y + 10, C.cian, 12);
+    textoSub('v', 'y', X + 6, yV + (p.vy > 0 ? -2 : 8), C.violeta, 12);
+  } else if (!v || v.fase === 'aterrizado') {
+    // Vectores iniciales en el cañón: v0 y sus componentes
+    const t = tiroActual();
+    const Y = sy(t.h0);
+    const xV = OX + t.vx * escala, yV = Y - t.vy0 * escala;
+    ctx.setLineDash([4, 4]); ctx.strokeStyle = 'rgba(234,242,255,.25)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(xV, Y); ctx.lineTo(xV, yV); ctx.lineTo(OX, yV); ctx.stroke(); ctx.setLineDash([]);
+    flecha(OX, Y, xV, Y, hexA(C.cian, 0.9), 2);
+    flecha(OX, Y, OX, yV, hexA(C.violeta, 0.9), 2);
+    flecha(OX, Y, xV, yV, C.texto, 2.4);
+    textoSub('v', '0', xV + 6, yV - 4, C.texto, 13);
+    textoSub('v', 'x', xV - 6, Y + 14, C.cian, 12);
+    textoSub('v', 'y0', OX + 6, yV - 10, C.violeta, 12);
+  }
+}
+
+/* --- Pelota con brillo --- */
+function dibujarPelota() {
+  const v = estado.vuelo;
+  if (!v) return;
+  const p = posicion(v.tiro, v.t);
+  const X = sx(p.x), Y = sy(Math.max(0, p.y));
+  const desvanecer = v.fase === 'aterrizado' ? clamp(1 - (reloj - v.tFin - 1.2) / 1.5, 0.35, 1) : 1;
+  const pulso = 1 + 0.08 * Math.sin(reloj * 14);
+  const r = 24 * pulso;
+  ctx.globalAlpha = desvanecer;
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.drawImage(SPR.bola, X - r, Y - r, r * 2, r * 2);
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.fillStyle = '#FFFFFF';
+  ctx.beginPath(); ctx.arc(X, Y, 5, 0, TAU); ctx.fill();
+  ctx.globalAlpha = 1;
+}
+
+/* --- Indicador cuando la pelota sale de la pantalla --- */
+function dibujarIndicadorFuera() {
+  const v = estado.vuelo;
+  if (!v || v.fase !== 'volando') return;
+  const p = posicion(v.tiro, v.t);
+  const X = sx(p.x), Y = sy(p.y);
+  if (Y < 6) {
+    const x = clamp(X, 20, ANCHO - 20);
+    ctx.fillStyle = C.ambar;
+    ctx.beginPath(); ctx.moveTo(x, 6); ctx.lineTo(x - 7, 18); ctx.lineTo(x + 7, 18); ctx.closePath(); ctx.fill();
+    etiqueta(`y = ${fmt(p.y, 1)} m`, x, 32, C.ambar);
+  } else if (X > ANCHO - 6) {
+    const y = clamp(Y, 20, OY - 10);
+    ctx.fillStyle = C.ambar;
+    ctx.beginPath(); ctx.moveTo(ANCHO - 6, y); ctx.lineTo(ANCHO - 18, y - 7); ctx.lineTo(ANCHO - 18, y + 7); ctx.closePath(); ctx.fill();
+    etiqueta(`x = ${fmt(p.x, 1)} m`, ANCHO - 24, y, C.ambar, 'right');
+  }
+}
+
+/* --- Sistema de partículas, ondas y textos flotantes (en píxeles de pantalla) --- */
+function emitir(x, y, opc) {
+  if (particulas.length > 700) return;
+  particulas.push({
+    x, y, vx: opc.vx || 0, vy: opc.vy || 0,
+    vida: opc.vida, max: opc.vida, tam: opc.tam || 6,
+    spr: opc.spr || SPR.cian, grav: opc.grav || 0, roce: opc.roce || 0
+  });
+}
+
+function explosion(x, y) {
+  const sprites = [SPR.verde, SPR.cian, SPR.magenta, SPR.blanco, SPR.violeta, SPR.ambar];
+  const n = reducirMov ? 30 : 110;
+  for (let i = 0; i < n; i++) {
+    const a = azar(Math.PI * 1.02, Math.PI * 1.98);   // hacia arriba
+    const vel = azar(120, 560);
+    emitir(x, y, { vx: Math.cos(a) * vel, vy: Math.sin(a) * vel, vida: azar(0.6, 1.5), tam: azar(4, 12), spr: sprites[i % sprites.length], grav: 560, roce: 1.4 });
+  }
+  ondas.push({ x, y, r: 6, vr: 300, vida: 0.9, max: 0.9, color: C.verde, grosor: 3 });
+  ondas.push({ x, y, r: 2, vr: 190, vida: 1.1, max: 1.1, color: C.magenta, grosor: 2 });
+  ondas.push({ x, y, r: 2, vr: 420, vida: 0.6, max: 0.6, color: C.blanco, grosor: 1.5 });
+  sacudida = reducirMov ? 0 : 11;
+  destello = 0.32;
+}
+
+function polvo(x, y, color) {
+  const n = reducirMov ? 8 : 22;
+  for (let i = 0; i < n; i++) {
+    const a = azar(Math.PI * 1.05, Math.PI * 1.95);
+    const vel = azar(40, 170);
+    emitir(x, y, { vx: Math.cos(a) * vel, vy: Math.sin(a) * vel * 0.7, vida: azar(0.4, 0.9), tam: azar(4, 9), spr: SPR.polvo, grav: 260, roce: 2.5 });
+  }
+  ondas.push({ x, y, r: 3, vr: 110, vida: 0.6, max: 0.6, color, grosor: 1.5 });
+  sacudida = Math.max(sacudida, reducirMov ? 0 : 3);
+}
+
+function fogonazo(tiro) {
+  // Chispas que salen de la boca del cañón al disparar
+  const bx = OX + Math.cos(tiro.th) * 32, by = sy(tiro.h0) - Math.sin(tiro.th) * 32;
+  for (let i = 0; i < (reducirMov ? 6 : 20); i++) {
+    const a = -tiro.th + azar(-0.35, 0.35);
+    const vel = azar(80, 340);
+    emitir(bx, by, { vx: Math.cos(a) * vel, vy: Math.sin(a) * vel, vida: azar(0.25, 0.55), tam: azar(4, 9), spr: i % 2 ? SPR.ambar : SPR.blanco, grav: 200, roce: 3 });
+  }
+  ondas.push({ x: bx, y: by, r: 2, vr: 140, vida: 0.35, max: 0.35, color: C.ambar, grosor: 2 });
+}
+
+function textoFlotante(texto, x, y, color, tam = 24) {
+  textos.push({ texto, x, y, color, tam, vida: 1.6, max: 1.6 });
+}
+
+function actualizarEfectos(dt) {
+  for (const p of particulas) {
+    const f = Math.exp(-p.roce * dt);
+    p.vx *= f; p.vy = p.vy * f + p.grav * dt;
+    p.x += p.vx * dt; p.y += p.vy * dt;
+    p.vida -= dt;
+  }
+  particulas = particulas.filter(p => p.vida > 0);
+  for (const o of ondas) { o.r += o.vr * dt; o.vr *= Math.exp(-2 * dt); o.vida -= dt; }
+  ondas = ondas.filter(o => o.vida > 0);
+  for (const t of textos) t.vida -= dt;
+  textos = textos.filter(t => t.vida > 0);
+  sacudida *= Math.exp(-dt * 8);
+  destello *= Math.exp(-dt * 6);
+}
+
+function dibujarEfectos() {
+  ctx.globalCompositeOperation = 'lighter';
+  for (const p of particulas) {
+    const a = p.vida / p.max;
+    const t = p.tam * (0.4 + 0.6 * a);
+    ctx.globalAlpha = a;
+    ctx.drawImage(p.spr, p.x - t, p.y - t, t * 2, t * 2);
+  }
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = 'source-over';
+  for (const o of ondas) {
+    ctx.strokeStyle = hexA(o.color, (o.vida / o.max) * 0.85);
+    ctx.lineWidth = o.grosor;
+    ctx.beginPath(); ctx.ellipse(o.x, o.y, o.r, o.r * 0.32, 0, 0, TAU); ctx.stroke();
+  }
+  // Textos flotantes: aparecen con un "pop" y suben
+  for (const t of textos) {
+    const k = 1 - t.vida / t.max;
+    const escala = k < 0.15 ? 0.6 + (k / 0.15) * 0.55 : 1.15 - Math.min(0.15, (k - 0.15) * 0.5);
+    ctx.save();
+    ctx.translate(t.x, t.y - k * 46);
+    ctx.scale(escala, escala);
+    ctx.globalAlpha = Math.min(1, t.vida / 0.4);
+    ctx.font = `900 ${t.tam}px ${F_TIT}`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(5,6,26,.85)'; ctx.strokeText(t.texto, 0, 0);
+    ctx.fillStyle = t.color; ctx.fillText(t.texto, 0, 0);
+    ctx.restore();
+  }
+}
+
+/* --- Avance del vuelo en el tiempo --- */
+function actualizarVuelo(dt) {
+  const v = estado.vuelo;
+  if (!v) return;
+  v.retroceso = Math.max(0, v.retroceso - dt * 4);
+  if (v.fase === 'volando') {
+    // "Cámara rápida": si el vuelo dura mucho (p. ej. en la Luna) se acelera la reproducción
+    v.t = Math.min(v.t + dt * v.velocidad, v.tiro.tv);
+    const p = posicion(v.tiro, v.t);
+    v.estela.push([p.x, p.y]);
+    if (v.estela.length > 26) v.estela.shift();
+    if (!reducirMov && Math.random() < 0.85) {
+      emitir(sx(p.x), sy(p.y), { vx: azar(-25, 25), vy: azar(-25, 25), vida: azar(0.3, 0.6), tam: azar(3, 7), spr: Math.random() < 0.5 ? SPR.cian : SPR.violeta, roce: 2 });
+    }
+    if (v.t >= v.tiro.tv) aterrizar(v);
+  } else if (v.estela.length) {
+    v.estela.shift(); // la estela se apaga poco a poco
+  }
+}
+
+/* --- HUD en tiempo real --- */
+const hud = { t: $('#hudT'), x: $('#hudX'), y: $('#hudY'), v: $('#hudV'), rapida: $('#hudRapida'), rapidaTxt: $('#hudRapidaTxt') };
+function actualizarHUD() {
+  let t = 0, x = 0, y = estado.h0, vel = estado.v0, rapida = 1;
+  const v = estado.vuelo;
+  if (v) {
+    const p = posicion(v.tiro, v.t);
+    t = v.t; x = p.x; y = Math.max(0, p.y); vel = Math.hypot(p.vx, p.vy);
+    if (v.fase === 'volando') rapida = v.velocidad;
+  }
+  escribir(hud.t, fmt(t)); escribir(hud.x, fmt(x)); escribir(hud.y, fmt(y)); escribir(hud.v, fmt(vel));
+  const mostrar = rapida > 1.05;
+  if (hud.rapida.hidden === mostrar) hud.rapida.hidden = !mostrar;
+  if (mostrar) escribir(hud.rapidaTxt, '×' + fmt(rapida, 1));
+}
+
+/* --- Dibujo completo de un fotograma --- */
+function cuadroEscena(dt) {
+  if (ANCHO < 2) return;
+  actualizarVuelo(dt);
+  actualizarCamara(dt);
+  actualizarEfectos(dt);
+
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.clearRect(0, 0, ANCHO, ALTO);
+  ctx.save();
+  if (sacudida > 0.3) ctx.translate(azar(-1, 1) * sacudida, azar(-1, 1) * sacudida);
+  dibujarPlanetaDeco();
+  dibujarSuelo();
+  dibujarCuadricula();
+  dibujarObjetivo();
+  dibujarFantasmas();
+  dibujarPrevia();
+  dibujarVuelo();
+  dibujarCanon();
+  dibujarVectores();
+  dibujarPelota();
+  dibujarEfectos();
+  dibujarIndicadorFuera();
+  ctx.restore();
+  if (destello > 0.01) {
+    ctx.fillStyle = `rgba(200,255,235,${destello})`;
+    ctx.fillRect(0, 0, ANCHO, ALTO);
+  }
+  actualizarHUD();
+}
+
+/* =====================================================================
+   8. INTERFAZ
+   ===================================================================== */
+// Cada variable tiene su slider (rng) y su casilla numérica (num)
+const controles = {
+  v0:     { rng: $('#rngV0'),     num: $('#numV0'),     caja: $('#ctlV0'),     min: 1, max: 50, paso: 0.1, dec: 1 },
+  angulo: { rng: $('#rngAngulo'), num: $('#numAngulo'), caja: $('#ctlAngulo'), min: 0, max: 90, paso: 0.5, dec: 1 },
+  h0:     { rng: $('#rngH0'),     num: $('#numH0'),     caja: $('#ctlH0'),     min: 0, max: 40, paso: 0.5, dec: 1 }
+};
+
+function fijarVariable(nombre, valor, origen = '') {
+  const c = controles[nombre];
+  valor = clamp(Math.round(valor / c.paso) * c.paso, c.min, c.max);
+  valor = Number(valor.toFixed(2));
+  const cambio = valor !== estado[nombre];
+  estado[nombre] = valor;
+  if (origen !== 'rng') c.rng.value = valor;
+  if (origen !== 'num') c.num.value = valor.toFixed(c.dec);
+  c.rng.style.setProperty('--pct', ((valor - c.min) / (c.max - c.min)) * 100 + '%');
+  if (cambio && origen && !reducirMov) {
+    // Microinteracción: el valor "late" al cambiar
+    c.num.parentElement.animate([{ transform: 'scale(1.1)' }, { transform: 'scale(1)' }], { duration: 260, easing: 'ease-out' });
+  }
+  if (cambio) alCambiarParametros();
+}
+
+function alCambiarParametros() {
+  actualizarPaneles();
+  actualizarFormulas();
+}
+
+function bloquearAltura(bloquear) {
+  const c = controles.h0;
+  c.rng.disabled = bloquear; c.num.disabled = bloquear;
+  c.caja.classList.toggle('bloqueado', bloquear);
+}
+
+/* --- Números animados (efecto "CountUp") --- */
+function animarNumero(el, destino, dec) {
+  el.classList.remove('oculto');
+  const desde = typeof el._valor === 'number' ? el._valor : destino;
+  el._valor = destino;
+  cancelAnimationFrame(el._raf);
+  if (reducirMov || desde === destino) { el.textContent = fmt(destino, dec); return; }
+  const t0 = performance.now(), dur = 420;
+  const paso = ahora => {
+    const k = Math.min(1, (ahora - t0) / dur);
+    const e = 1 - Math.pow(1 - k, 3);
+    el.textContent = fmt(lerp(desde, destino, e), dec);
+    if (k < 1) el._raf = requestAnimationFrame(paso);
+  };
+  el._raf = requestAnimationFrame(paso);
+}
+
+function ocultarNumero(el) {
+  cancelAnimationFrame(el._raf);
+  el._valor = undefined;
+  el.textContent = '¿?';
+  el.classList.add('oculto');
+}
+
+/* --- Tarjetas de datos --- */
+const datoEl = { R: $('#datoR'), H: $('#datoH'), tv: $('#datoTv'), vx: $('#datoVx'), vy: $('#datoVy') };
+function actualizarPaneles() {
+  const ocultos = datosOcultos();
+  const tiro = ocultos ? estado.ultimoTiro : tiroActual();
+  const actual = tiroActual();
+
+  let etiquetaTxt = 'Predicción en vivo', clase = '';
+  if (ocultos) {
+    etiquetaTxt = tiro ? 'Último lanzamiento' : 'Calcula tú';
+    clase = tiro ? 'ultimo' : 'calcula';
+  }
+  $$('.dato-tag').forEach(t => { t.textContent = etiquetaTxt; t.className = 'dato-tag ' + clase; });
+
+  if (tiro) {
+    animarNumero(datoEl.R, tiro.R, 2);
+    animarNumero(datoEl.H, tiro.H, 2);
+    animarNumero(datoEl.tv, tiro.tv, 2);
+  } else {
+    ocultarNumero(datoEl.R); ocultarNumero(datoEl.H); ocultarNumero(datoEl.tv);
+  }
+  // Las componentes dependen solo de v0 y θ: siempre se muestran
+  animarNumero(datoEl.vx, actual.vx, 1);
+  animarNumero(datoEl.vy, actual.vy0, 1);
+}
+
+/* --- Fórmulas con los valores sustituidos --- */
+const F = { vx: $('#fVx'), vy: $('#fVy'), xt: $('#fXt'), yt: $('#fYt'), ts: $('#fTs'), H: $('#fH'), tv: $('#fTv'), R: $('#fR') };
+function actualizarFormulas() {
+  const t = tiroActual();
+  const oc = datosOcultos();
+  const g = fmt(t.g, 2);
+  // Resultado: se muestra o se reemplaza por "?" en los niveles difíciles
+  const res = (valor, unidad, ocultable = true) =>
+    ocultable && oc ? '<b class="oculto">?</b>' : `<b>${fmt(valor)} ${unidad}</b>`;
+
+  F.vx.innerHTML = `= ${fmt(t.v0, 1)}·cos ${fmt(t.angulo, 1)}° = ${res(t.vx, 'm/s', false)}`;
+  F.vy.innerHTML = `= ${fmt(t.v0, 1)}·sen ${fmt(t.angulo, 1)}° = ${res(t.vy0, 'm/s', false)}`;
+  F.xt.innerHTML = `= ${fmt(t.vx)}·t`;
+  F.yt.innerHTML = `= ${fmt(t.h0, 1)} + ${fmt(t.vy0)}·t − ${fmt(t.g / 2, 2)}·t²`;
+  F.ts.innerHTML = `= ${fmt(t.vy0)} / ${g} = ${res(t.tSub, 's')}`;
+  F.H.innerHTML = `= ${fmt(t.h0, 1)} + ${fmt(t.vy0)}² / (2·${g}) = ${res(t.H, 'm')}`;
+  F.tv.innerHTML = `= [${fmt(t.vy0)} + √(${fmt(t.vy0)}² + 2·${g}·${fmt(t.h0, 1)})] / ${g} = ${res(t.tv, 's')}`;
+  F.R.innerHTML = oc ? `= ${fmt(t.vx)}·t<sub>v</sub> = ${res(t.R, 'm')}` : `= ${fmt(t.vx)}·${fmt(t.tv)} = ${res(t.R, 'm')}`;
+  $('#avisoCalcula').hidden = !oc;
+}
+
+/* --- Bitácora de lanzamientos --- */
+const cuerpoBitacora = $('#cuerpoBitacora');
+function agregarBitacora(tiro, resultado, delta) {
+  estado.contador++;
+  estado.bitacora.unshift({ n: estado.contador, ...tiro, planetaNombre: planeta().nombre, resultado, delta });
+  if (estado.bitacora.length > 8) estado.bitacora.pop();
+  renderBitacora();
+}
+function renderBitacora() {
+  if (!estado.bitacora.length) {
+    cuerpoBitacora.innerHTML = '<tr class="vacia"><td colspan="9">Aún no hay lanzamientos. ¡Presiona LANZAR para empezar a experimentar!</td></tr>';
+    return;
+  }
+  cuerpoBitacora.innerHTML = estado.bitacora.map((b, i) => {
+    let nota = '—';
+    if (b.resultado === 'acierto') nota = '✔ Acierto';
+    else if (b.resultado) nota = `${b.delta > 0 ? '+' : '−'}${fmt(Math.abs(b.delta), 1)} m`;
+    return `<tr class="${i === 0 ? 'nueva' : ''} ${b.resultado || ''}">
+      <td>${b.n}</td><td>${fmt(b.v0, 1)}</td><td>${fmt(b.angulo, 1)}°</td><td>${fmt(b.h0, 1)}</td>
+      <td>${b.planetaNombre}</td><td>${fmt(b.R)}</td><td>${fmt(b.H)}</td><td>${fmt(b.tv)}</td><td>${nota}</td></tr>`;
+  }).join('');
+}
+
+/* --- Avisos (toast) --- */
+const avisoEl = $('#aviso');
+let avisoTimer = 0;
+function avisar(html, tipo = '', duracion = 2800) {
+  avisoEl.innerHTML = html;
+  avisoEl.className = 'aviso ' + tipo;
+  void avisoEl.offsetWidth;            // reinicia la animación
+  avisoEl.classList.add('visible');
+  clearTimeout(avisoTimer);
+  avisoTimer = setTimeout(() => avisoEl.classList.remove('visible'), duracion);
+}
+
+/* --- Datos curiosos --- */
+let indiceTip = Math.floor(Math.random() * DATOS_CURIOSOS.length);
+function mostrarTip(siguiente) {
+  if (siguiente) indiceTip = (indiceTip + 1) % DATOS_CURIOSOS.length;
+  const p = $('#tip');
+  p.style.opacity = 0;
+  setTimeout(() => { p.textContent = DATOS_CURIOSOS[indiceTip]; p.style.opacity = 1; }, siguiente ? 180 : 0);
+}
+
+/* --- Lanzar --- */
+const btnLanzar = $('#btnLanzar');
+function lanzar() {
+  if (estado.introAbierta) return;
+  if (estado.vuelo && estado.vuelo.fase === 'volando') return;
+  if (estado.modo === 'desafio' && estado.desafio.esperando) return;
+  const tiro = tiroActual();
+  if (tiro.tv < 0.02) {
+    avisar('<b>Sin despegue</b><small>Con θ = 0° y h₀ = 0 m la pelota no se eleva. Sube el ángulo o la altura.</small>', 'fallo');
+    Sonido.fallo();
+    return;
+  }
+  estado.vuelo = {
+    tiro, t: 0, fase: 'volando', estela: [], retroceso: 1,
+    velocidad: Math.max(1, tiro.tv / 3.2),   // como mucho ~3,2 s reales de animación
+    tFin: 0, resultado: null, delta: 0
+  };
+  if (estado.modo === 'desafio') { estado.desafio.intentos++; actualizarPanelDesafio(); }
+  fogonazo(tiro);
+  sacudida = Math.max(sacudida, reducirMov ? 0 : 2.5);
+  Sonido.lanzar();
+  btnLanzar.disabled = true;
+  $('#txtLanzar').textContent = 'EN VUELO…';
+}
+
+function aterrizar(v) {
+  v.fase = 'aterrizado';
+  v.tFin = reloj;
+  const tiro = v.tiro;
+  estado.ultimoTiro = tiro;
+  btnLanzar.disabled = false;
+  $('#txtLanzar').textContent = 'LANZAR';
+
+  if (estado.modo === 'desafio' && estado.desafio.objetivo) {
+    const r = evaluarTiro(tiro);
+    v.resultado = r.resultado; v.delta = r.delta;
+  } else {
+    polvo(sx(tiro.R), OY, planeta().linea);
+    Sonido.aterrizar();
+    avisar(`<b>Aterrizaje</b><small>Alcance ${fmt(tiro.R)} m · Altura máx. ${fmt(tiro.H)} m · Vuelo ${fmt(tiro.tv)} s</small>`);
+  }
+  agregarFantasma(tiro, v.resultado);
+  agregarBitacora(tiro, v.resultado, v.delta);
+  actualizarPaneles();
+}
+
+const COLORES_FANTASMA = [C.violeta, C.cian, C.ambar, C.magenta, C.verde];
+function agregarFantasma(tiro, resultado) {
+  let color = COLORES_FANTASMA[estado.contador % COLORES_FANTASMA.length];
+  if (resultado === 'acierto') color = C.verde;
+  else if (resultado) color = '#FF7AB8';
+  estado.fantasmas.push({ pts: muestrear(tiro, 60), R: tiro.R, H: tiro.H, color });
+  if (estado.fantasmas.length > 6) estado.fantasmas.shift();
+}
+
+function limpiar() {
+  estado.fantasmas = [];
+  if (estado.vuelo && estado.vuelo.fase !== 'volando') estado.vuelo = null;
+  cam.reajustar = true;
+}
+
+/* --- Cambiar de modo --- */
+function cambiarModo(modo) {
+  const d = estado.desafio;
+  clearTimeout(d.temporizador);
+  d.esperando = false;
+  estado.modo = modo;
+  estado.vuelo = null;
+  estado.fantasmas = [];
+  estado.ultimoTiro = null;
+  btnLanzar.disabled = false;
+  $('#txtLanzar').textContent = 'LANZAR';
+
+  $$('.pestana').forEach(b => {
+    const activa = b.dataset.modo === modo;
+    b.classList.toggle('activa', activa);
+    b.setAttribute('aria-selected', activa);
+  });
+  moverIndicador();
+  descifrar($('#tituloModo'), modo === 'libre' ? 'MODO LIBRE' : 'MODO DESAFÍO');
+  $('#panelDesafio').hidden = modo !== 'desafio';
+
+  if (modo === 'desafio') {
+    aplicarNivel();
+    if (!d.objetivo) nuevoObjetivo();
+    else {
+      d.objetivo.t0 = reloj;
+      if (d.objetivo.h0 !== null) fijarVariable('h0', d.objetivo.h0);
+      actualizarPanelDesafio();
+    }
+  } else {
+    bloquearAltura(false);
+    actualizarInterruptorPrevia();
+  }
+  cam.reajustar = true;
+  actualizarPaneles();
+  actualizarFormulas();
+}
+
+function moverIndicador() {
+  const activa = $('.pestana.activa');
+  const ind = $('.pestanas-indicador');
+  if (!activa) return;
+  ind.style.width = activa.offsetWidth + 'px';
+  ind.style.transform = `translateX(${activa.offsetLeft}px)`;
+}
+
+function actualizarInterruptorPrevia() {
+  const chk = $('#chkPrevia');
+  const bloqueado = estado.modo === 'desafio' && nivel().vistaPrevia === 'ninguna';
+  chk.disabled = bloqueado;
+  chk.checked = bloqueado ? false : estado.vistaPrevia;
+  chk.closest('.interruptor').title = bloqueado ? 'Desactivada en este nivel: ¡calcula con las fórmulas!' : '';
+}
+
+/* --- Cambiar de planeta --- */
+function cambiarPlaneta(id) {
+  if (id === estado.planeta) return;
+  estado.planeta = id;
+  const p = planeta();
+  $$('.planeta').forEach(b => {
+    const on = b.dataset.planeta === id;
+    b.classList.toggle('activo', on);
+    b.setAttribute('aria-checked', on);
+  });
+  $('#chipEsfera').className = 'esfera ' + id;
+  $('#chipPlaneta').innerHTML = `<b>${p.nombre}</b> · g = ${fmt(p.g, 2)} m/s²`;
+  planetaT0 = reloj;
+  crearPlanetaDecorativo();
+  if (estado.modo === 'desafio') {
+    clearTimeout(estado.desafio.temporizador);
+    estado.desafio.esperando = false;
+    estado.ultimoTiro = null;
+    nuevoObjetivo();
+  }
+  cam.reajustar = true;
+  actualizarPaneles();
+  actualizarFormulas();
+  avisar(`<b>${p.nombre}</b><small>Gravedad: g = ${fmt(p.g, 2)} m/s² (${fmt(p.g / 9.8, 2)} veces la de la Tierra)</small>`);
+}
+
+/* =====================================================================
+   9. MODO DESAFÍO
+   ===================================================================== */
+const statEl = { puntos: $('#statPuntos'), racha: $('#statRacha'), intentos: $('#statIntentos'), record: $('#statRecord') };
+
+function aplicarNivel() {
+  const d = estado.desafio, n = nivel();
+  $$('.nivel').forEach(b => {
+    const on = b.dataset.nivel === d.nivel;
+    b.classList.toggle('activo', on);
+    b.setAttribute('aria-checked', on);
+  });
+  $('#nivelDesc').textContent = n.desc;
+  d.record = almacen.leer('parabola-record-' + d.nivel, 0);
+  actualizarInterruptorPrevia();
+  bloquearAltura(estado.modo === 'desafio' && n.alturaAleatoria);
+}
+
+function cambiarNivel(id) {
+  const d = estado.desafio;
+  if (id === d.nivel) return;
+  clearTimeout(d.temporizador);
+  d.nivel = id; d.puntos = 0; d.racha = 0; d.aciertos = 0; d.esperando = false; d.recordAvisado = false;
+  statEl.puntos._valor = 0;
+  estado.ultimoTiro = null;
+  aplicarNivel();
+  nuevoObjetivo();
+  actualizarPaneles();
+  actualizarFormulas();
+  avisar(`<b>Nivel ${nivel().nombre}</b><small>${nivel().desc}</small>`, '', 3600);
+}
+
+function nuevoObjetivo() {
+  const d = estado.desafio, n = nivel();
+  const alcanceMax = (V0_MAX * V0_MAX) / planeta().g;   // alcance máximo con h0 = 0 y θ = 45°
+  let x = azar(n.rango[0], n.rango[1]) * alcanceMax;
+  // Evita que el nuevo objetivo quede casi en el mismo lugar que el anterior
+  if (d.objetivo && Math.abs(x - d.objetivo.x) < alcanceMax * 0.06) x = azar(n.rango[0], n.rango[1]) * alcanceMax;
+  d.objetivo = {
+    x: Math.round(x * 10) / 10,
+    w: Math.round(n.ancho * alcanceMax * 10) / 10,
+    t0: reloj, acertado: false, h0: null
+  };
+  if (n.alturaAleatoria) {
+    const h = Math.round(azar(3, 30) * 2) / 2;
+    d.objetivo.h0 = h;
+    fijarVariable('h0', h);
+  }
+  d.intentos = 0;
+  d.esperando = false;
+  estado.fantasmas = [];
+  estado.vuelo = null;
+  btnLanzar.disabled = false;
+  $('#txtLanzar').textContent = 'LANZAR';
+  cam.reajustar = true;
+  actualizarPanelDesafio();
+}
+
+function evaluarTiro(tiro) {
+  const d = estado.desafio, o = d.objetivo, n = nivel();
+  const delta = tiro.R - o.x;          // + pasado, − corto
+  const tolerancia = o.w / 2;
+  const X = sx(tiro.R);
+
+  if (Math.abs(delta) <= tolerancia) {
+    // ---------- ¡ACIERTO! ----------
+    const precision = 1 - Math.abs(delta) / tolerancia;          // 1 = centro perfecto
+    d.racha++; d.aciertos++;
+    const base = d.intentos <= PUNTOS_BASE.length ? PUNTOS_BASE[d.intentos - 1] : 10;
+    const bonoRacha = Math.min(2, 1 + 0.1 * (d.racha - 1));
+    const puntos = Math.round((base + 50 * precision) * n.mult * bonoRacha);
+    d.puntos += puntos;
+    o.acertado = true;
+    d.esperando = true;
+
+    let extra = '';
+    if (d.puntos > d.record) {
+      d.record = d.puntos;
+      almacen.guardar('parabola-record-' + d.nivel, d.record);
+      if (!d.recordAvisado) { extra = ' · ¡Nuevo récord!'; d.recordAvisado = true; }
+    }
+    const perfecto = precision >= 0.85;
+    explosion(X, OY);
+    textoFlotante(`+${puntos}`, X, OY - 70, C.verde, 30);
+    if (perfecto) textoFlotante('¡PERFECTO!', X, OY - 110, C.ambar, 20);
+    marco.classList.remove('impacto'); void marco.offsetWidth; marco.classList.add('impacto');
+    Sonido.acierto();
+
+    const idx = ORDEN_NIVELES.indexOf(d.nivel);
+    const sugerencia = d.aciertos % 5 === 0 && idx < ORDEN_NIVELES.length - 1
+      ? `<small>¡Dominas este nivel! Prueba el nivel ${NIVELES[ORDEN_NIVELES[idx + 1]].nombre}.</small>` : '';
+    avisar(`<b>${perfecto ? '¡PERFECTO!' : '¡IMPACTO!'} +${puntos} pts</b>
+      <small>${d.intentos === 1 ? 'Al primer intento' : `En ${d.intentos} intentos`}${d.racha > 1 ? ` · racha ×${fmt(bonoRacha, 1)}` : ''}${extra}</small>${sugerencia}`, 'exito', 3200);
+
+    d.temporizador = setTimeout(nuevoObjetivo, 1900);
+    actualizarPanelDesafio(true);
+    return { resultado: 'acierto', delta };
+  }
+
+  // ---------- FALLO ----------
+  d.racha = 0;
+  polvo(X, OY, C.magenta);
+  Sonido.fallo();
+  const dist = fmt(Math.abs(delta), 1);
+  const corto = delta < 0;
+  let pista;
+  if (corto) pista = estado.angulo > 45 ? 'Aumenta la velocidad o baja un poco el ángulo (hacia 45°).' : 'Aumenta la velocidad o sube un poco el ángulo (hacia 45°).';
+  else pista = 'Reduce la velocidad o aleja el ángulo de 45°.';
+  avisar(`<b>${corto ? `Te faltaron ${dist} m` : `Te pasaste por ${dist} m`}</b><small>${pista}</small>`, 'fallo', 3200);
+  actualizarPanelDesafio();
+  return { resultado: corto ? 'corto' : 'largo', delta };
+}
+
+function actualizarPanelDesafio(acierto = false) {
+  const d = estado.desafio, o = d.objetivo;
+  animarNumero(statEl.puntos, d.puntos, 0);
+  escribir(statEl.racha, String(d.racha));
+  escribir(statEl.intentos, String(d.intentos));
+  escribir(statEl.record, fmt(d.record, 0));
+  $('#cajaRacha').classList.toggle('caliente', d.racha >= 2);
+  if (acierto && !reducirMov) {
+    const caja = statEl.puntos.parentElement;
+    caja.classList.remove('salto'); void caja.offsetWidth; caja.classList.add('salto');
+  }
+  if (o) {
+    $('#objX').textContent = `x = ${fmt(o.x, 1)} m`;
+    $('#objAncho').textContent = `ancho ${fmt(o.w, 1)} m (±${fmt(o.w / 2, 2)} m)`;
+  }
+}
+
+/* =====================================================================
+   10. MICROINTERACCIONES (inspiradas en React Bits, en JS puro)
+   ===================================================================== */
+
+/* --- "Click Spark": chispas al hacer clic en cualquier parte --- */
+const Chispas = (() => {
+  const lienzoC = $('#chispas');
+  const c = lienzoC.getContext('2d');
+  let lista = [], activo = false;
+  function redimensionar() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    lienzoC.width = Math.round(innerWidth * dpr); lienzoC.height = Math.round(innerHeight * dpr);
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  function disparar(x, y) {
+    if (reducirMov) return;
+    const t0 = performance.now();
+    for (let i = 0; i < 8; i++) lista.push({ x, y, a: (i / 8) * TAU + azar(-0.12, 0.12), t0 });
+    if (!activo) { activo = true; requestAnimationFrame(cuadro); }
+  }
+  function cuadro(ahora) {
+    c.clearRect(0, 0, innerWidth, innerHeight);
+    lista = lista.filter(s => ahora - s.t0 < 420);
+    c.lineCap = 'round'; c.lineWidth = 2;
+    for (const s of lista) {
+      const k = (ahora - s.t0) / 420, e = 1 - Math.pow(1 - k, 3);
+      const d1 = 5 + e * 26, largo = 11 * (1 - e);
+      c.strokeStyle = `rgba(0,229,255,${1 - k})`;
+      c.beginPath();
+      c.moveTo(s.x + Math.cos(s.a) * d1, s.y + Math.sin(s.a) * d1);
+      c.lineTo(s.x + Math.cos(s.a) * (d1 + largo), s.y + Math.sin(s.a) * (d1 + largo));
+      c.stroke();
+    }
+    if (lista.length) requestAnimationFrame(cuadro);
+    else { activo = false; c.clearRect(0, 0, innerWidth, innerHeight); }
+  }
+  return { redimensionar, disparar };
+})();
+
+/* --- "Decrypted Text": el texto aparece descifrándose --- */
+function descifrar(el, texto, duracion = 650) {
+  if (reducirMov) { el.textContent = texto; return; }
+  const glifos = 'ABCDEFGHIJKLMNÑOPQRSTUVWXYZ0123456789#%&@$<>/*+';
+  const t0 = performance.now();
+  cancelAnimationFrame(el._dRaf);
+  const paso = ahora => {
+    const k = Math.min(1, (ahora - t0) / duracion);
+    const revelados = Math.floor(k * texto.length);
+    let s = '';
+    for (let i = 0; i < texto.length; i++) {
+      s += i < revelados || texto[i] === ' ' ? texto[i] : glifos[(Math.random() * glifos.length) | 0];
+    }
+    el.textContent = s;
+    if (k < 1) el._dRaf = requestAnimationFrame(paso);
+  };
+  el._dRaf = requestAnimationFrame(paso);
+}
+
+/* --- "Split Text": divide el título en letras animadas --- */
+function dividirTitulo(el) {
+  const letras = [...el.textContent];
+  el.innerHTML = letras.map((l, i) => `<span class="letra" aria-hidden="true" style="--i:${i};--n:${letras.length}">${l}</span>`).join('');
+}
+
+/* --- Botón con efecto imán + onda al hacer clic --- */
+function botonIman(btn) {
+  btn.addEventListener('pointermove', e => {
+    if (e.pointerType !== 'mouse' || reducirMov) return;
+    const r = btn.getBoundingClientRect();
+    const dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+    btn.style.transform = `translate(${dx * 0.12}px, ${dy * 0.25}px)`;
+  });
+  btn.addEventListener('pointerleave', () => { btn.style.transform = ''; });
+  btn.addEventListener('pointerdown', e => {
+    const r = btn.getBoundingClientRect();
+    const onda = document.createElement('span');
+    const tam = Math.max(r.width, r.height) * 2.2;
+    onda.className = 'onda-clic';
+    onda.style.cssText = `width:${tam}px;height:${tam}px;left:${e.clientX - r.left}px;top:${e.clientY - r.top}px`;
+    btn.appendChild(onda);
+    onda.addEventListener('animationend', () => onda.remove());
+  });
+}
+
+/* --- "Spotlight": las tarjetas brillan donde está el ratón --- */
+let posRaton = null, rafRaton = 0;
+function alMoverRaton(e) {
+  posRaton = e;
+  if (rafRaton) return;
+  rafRaton = requestAnimationFrame(() => {
+    rafRaton = 0;
+    const ev = posRaton;
+    Fondo.raton(ev.clientX, ev.clientY);
+    const tarjeta = ev.target.closest ? ev.target.closest('.tarjeta') : null;
+    if (tarjeta) {
+      const r = tarjeta.getBoundingClientRect();
+      tarjeta.style.setProperty('--mx', ev.clientX - r.left + 'px');
+      tarjeta.style.setProperty('--my', ev.clientY - r.top + 'px');
+    }
+  });
+}
+
+/* --- Pantalla de inicio --- */
+function abrirIntro() {
+  estado.introAbierta = true;
+  $('#intro').classList.remove('oculta');
+  $('#app').inert = true;
+}
+function cerrarIntro(modo) {
+  estado.introAbierta = false;
+  $('#intro').classList.add('oculta');
+  $('#app').inert = false;
+  document.body.classList.add('app-lista');
+  Sonido.clic();
+  cambiarModo(modo);
+  // El tamaño del escenario puede cambiar con la animación de entrada
+  setTimeout(() => { redimensionarEscena(); moverIndicador(); }, 50);
+}
+
+/* --- Sonido on/off --- */
+function actualizarBotonSonido() {
+  const b = $('#btnSonido');
+  b.setAttribute('aria-pressed', Sonido.activo);
+  b.title = Sonido.activo ? 'Sonido activado' : 'Sonido desactivado';
+  b.setAttribute('aria-label', b.title);
+  $('#icoSonido').innerHTML = Sonido.activo
+    ? '<path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/>'
+    : '<path d="M4 9v6h4l5 4V5L8 9z"/><path d="M17 9l5 6M22 9l-5 6"/>';
+}
+
+/* =====================================================================
+   11. EVENTOS, BUCLE PRINCIPAL E INICIO
+   ===================================================================== */
+function conectarEventos() {
+  // Sliders y casillas numéricas
+  Object.entries(controles).forEach(([nombre, c]) => {
+    c.rng.addEventListener('input', () => fijarVariable(nombre, parseFloat(c.rng.value), 'rng'));
+    c.num.addEventListener('input', () => {
+      const v = parseFloat(c.num.value);
+      if (Number.isFinite(v)) fijarVariable(nombre, v, 'num');
+    });
+    c.num.addEventListener('change', () => fijarVariable(nombre, estado[nombre], 'normalizar'));
+  });
+
+  // Botones principales
+  btnLanzar.addEventListener('click', lanzar);
+  botonIman(btnLanzar);
+  $('#btnLimpiar').addEventListener('click', () => { limpiar(); Sonido.clic(); });
+  $('#btnBorrarBitacora').addEventListener('click', () => { estado.bitacora = []; renderBitacora(); Sonido.clic(); });
+  $('#btnTip').addEventListener('click', () => { mostrarTip(true); Sonido.clic(); });
+  $('#btnSaltar').addEventListener('click', () => {
+    if (estado.desafio.esperando) return;
+    estado.desafio.racha = 0;
+    nuevoObjetivo();
+    Sonido.clic();
+    avisar('<b>Nuevo objetivo</b><small>Saltaste el anterior: la racha vuelve a 0.</small>');
+  });
+
+  // Pestañas de modo
+  $$('.pestana').forEach(b => b.addEventListener('click', () => {
+    if (b.dataset.modo !== estado.modo) { cambiarModo(b.dataset.modo); Sonido.clic(); }
+  }));
+  // Planetas y niveles
+  $$('.planeta').forEach(b => b.addEventListener('click', () => { cambiarPlaneta(b.dataset.planeta); Sonido.clic(); }));
+  $$('.nivel').forEach(b => b.addEventListener('click', () => { cambiarNivel(b.dataset.nivel); Sonido.clic(); }));
+
+  // Interruptores
+  $('#chkPrevia').addEventListener('change', e => { estado.vistaPrevia = e.target.checked; cam.reajustar = true; Sonido.clic(); });
+  $('#chkVectores').addEventListener('change', e => { estado.vectores = e.target.checked; Sonido.clic(); });
+
+  // Sonido y menú
+  $('#btnSonido').addEventListener('click', () => {
+    Sonido.activo = !Sonido.activo;
+    almacen.guardar('parabola-sonido', Sonido.activo);
+    actualizarBotonSonido();
+    Sonido.clic();
+  });
+  $('#btnMenu').addEventListener('click', abrirIntro);
+  $('#logo').addEventListener('click', e => { e.preventDefault(); abrirIntro(); });
+  $$('[data-iniciar]').forEach(b => b.addEventListener('click', () => cerrarIntro(b.dataset.iniciar)));
+
+  // Atajos de teclado
+  let navegandoConTeclado = false; // true si el usuario se mueve con Tab entre botones
+  document.addEventListener('pointerdown', () => { navegandoConTeclado = false; }, { passive: true });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Tab') navegandoConTeclado = true;
+    if (estado.introAbierta || e.ctrlKey || e.metaKey || e.altKey) return;
+    const el = e.target;
+    const escribiendo = el.tagName === 'INPUT' && el.type !== 'range' && el.type !== 'checkbox';
+    if (escribiendo) return;
+    // Si un botón tiene el foco por TECLADO, Espacio lo activa (accesibilidad);
+    // si lo tiene porque se hizo clic con el ratón, Espacio lanza.
+    if (e.code === 'Space' && !(el.tagName === 'BUTTON' && navegandoConTeclado)) {
+      e.preventDefault();
+      if (el.tagName === 'BUTTON') el.blur();
+      lanzar();
+      return;
+    }
+    if (el.type === 'range') return; // el slider enfocado ya usa las flechas
+    const fino = e.shiftKey;
+    const acciones = {
+      ArrowRight: () => fijarVariable('angulo', estado.angulo + (fino ? 0.5 : 1), 'tecla'),
+      ArrowLeft:  () => fijarVariable('angulo', estado.angulo - (fino ? 0.5 : 1), 'tecla'),
+      ArrowUp:    () => fijarVariable('v0', estado.v0 + (fino ? 0.1 : 0.5), 'tecla'),
+      ArrowDown:  () => fijarVariable('v0', estado.v0 - (fino ? 0.1 : 0.5), 'tecla')
+    };
+    if (acciones[e.key]) { e.preventDefault(); acciones[e.key](); }
+  });
+
+  // Ratón / toque
+  document.addEventListener('pointermove', alMoverRaton, { passive: true });
+  document.addEventListener('pointerdown', e => Chispas.disparar(e.clientX, e.clientY), { passive: true });
+
+  // Cambios de tamaño
+  new ResizeObserver(() => redimensionarEscena()).observe(marco);
+  window.addEventListener('resize', () => { Fondo.redimensionar(); Chispas.redimensionar(); moverIndicador(); });
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { moverIndicador(); redimensionarEscena(); });
+}
+
+// Bucle principal: ~60 fotogramas por segundo
+let ultimoTiempo = performance.now();
+function bucle(ahora) {
+  const dt = Math.min(0.05, (ahora - ultimoTiempo) / 1000); // limita saltos (p. ej. al volver a la pestaña)
+  ultimoTiempo = ahora;
+  reloj += dt;
+  Fondo.cuadro(reloj, dt);
+  cuadroEscena(dt);
+  requestAnimationFrame(bucle);
+}
+
+function iniciar() {
+  dividirTitulo($('#introTitulo'));
+  setTimeout(() => descifrar($('#introSub'), 'LABORATORIO DE TIRO OBLICUO', 1100), 500);
+  $('#app').inert = true;
+
+  fijarVariable('v0', estado.v0);
+  fijarVariable('angulo', estado.angulo);
+  fijarVariable('h0', estado.h0);
+
+  conectarEventos();
+  actualizarBotonSonido();
+  Fondo.redimensionar();
+  Chispas.redimensionar();
+  redimensionarEscena();
+  moverIndicador();
+  actualizarPaneles();
+  actualizarFormulas();
+  renderBitacora();
+  mostrarTip(false);
+  requestAnimationFrame(bucle);
+}
+
+iniciar();
+</script>
+</body>
+</html>
